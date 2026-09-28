@@ -1,0 +1,73 @@
+{
+  "name": "vscode-tools-bridge",
+  "displayName": "VS Code Tools Bridge",
+  "description": "Publishes selected VS Code and Copilot agent tools to Claude Code over MCP, through a per-window named pipe.",
+  "publisher": "local",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./src/extension.ts",
+  "enabledApiProposals": [
+    "chatParticipantPrivate"
+  ],
+  "engines": {
+    "vscode": "^1.138.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "VS Code Tools Bridge",
+      "properties": {
+        "vscodeToolsBridge.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "Serve this window's tools to Claude Code. Off by default; turn it on in the workspace settings of each workspace that needs it."
+        },
+        "vscodeToolsBridge.autoApprove": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "Run forwarded tools that ask for confirmation (open or navigate a browser page, run Playwright code) without the modal dialog. Works only while VS Code runs with this extension's proposed API enabled: add `\"enable-proposed-api\": [\"local.vscode-tools-bridge\"]` to `argv.json` (**Preferences: Configure Runtime Arguments**) and restart. Without that, the dialog still shows."
+        },
+        "vscodeToolsBridge.executeCommand.allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "*"
+          ],
+          "markdownDescription": "Command IDs the `execute_command` MCP tool may run. `*` matches any run of characters, so `editor.action.*` allows every editor action. A command must match an allow entry and no deny entry."
+        },
+        "vscodeToolsBridge.executeCommand.deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Command IDs the `execute_command` MCP tool must never run, with the same `*` wildcard. Deny wins over allow."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node test/render-check.ts && node test/run.ts",
+    "package": "vsce package --allow-missing-repository --skip-license"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@vscode/prompt-tsx": "^0.4.0-alpha.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "@types/vscode": "^1.138.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "typescript": "^7.0.2"
+  }
+}

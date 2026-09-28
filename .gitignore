@@ -1,0 +1,4 @@
+node_modules/
+# VS Code downloads and per-run state from the isolated test instance.
+.vscode-test/
+*.vsix
