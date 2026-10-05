@@ -9,8 +9,17 @@
 import { connect } from 'node:net';
 import { findRecord } from './src/discovery.ts';
 
+// Claude Code can start this before the window has activated the extension or
+// switched to this folder, so look for the window for a few seconds before giving up.
+const FIND_WINDOW_MS = 15_000;
+const FIND_RETRY_MS = 500;
+
 const cwd = process.env['VSCODE_TOOLS_BRIDGE_FOLDER'] ?? process.cwd();
-const record = findRecord(cwd);
+let record = findRecord(cwd);
+for (let waited = 0; !record && waited < FIND_WINDOW_MS; waited += FIND_RETRY_MS) {
+	await new Promise(done => setTimeout(done, FIND_RETRY_MS));
+	record = findRecord(cwd);
+}
 if (!record) {
 	process.stderr.write(`vscode-tools-bridge: no VS Code window has ${cwd} or a parent of it as its first workspace folder, or the bridge extension is not running there.\n`);
 	process.exit(1);

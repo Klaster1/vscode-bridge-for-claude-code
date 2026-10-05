@@ -155,7 +155,7 @@ Things worth knowing:
 
 | Symptom | Cause |
 |---------|-------|
-| `no VS Code window has <dir> or a parent of it as its first workspace folder` | The bridge is off in that window, or Claude started outside the window's first folder. Check the output channel. |
+| `no VS Code window has <dir> or a parent of it as its first workspace folder` | The bridge is off in that window, or Claude started outside the window's first folder. The launcher waits 15 s for the window before it reports this. Check the output channel. |
 | `cannot reach the VS Code window … Is that window still open?` | The window closed or reloaded after Claude connected. Run `/mcp` and reconnect. |
 | Browser or Copilot tools missing | Copilot is not signed in, or `workbench.browser.enableChatTools` is off. The tool list reflects the window at the moment Claude asks for it. |
 | A browser call hangs | A confirmation dialog is waiting in the VS Code window. Answer it, or set up auto-approve. |
