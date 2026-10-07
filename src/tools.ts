@@ -465,8 +465,42 @@ const sharedBrowserPages: BridgeTool = {
 	},
 };
 
+// --- visible_images ----------------------------------------------------------
+
+/** The image types Claude Code's Read tool shows as images. */
+const imageFile = /\.(png|jpe?g|gif|webp)$/i;
+
+/**
+ * Image files shown in an editor group right now. An image opens in VS Code's
+ * image preview, a custom editor, so Claude Code's own IDE context, which
+ * follows the active text editor, never reports it.
+ */
+function visibleImages(): { path: string; active: boolean }[] {
+	const out: { path: string; active: boolean }[] = [];
+	for (const group of vscode.window.tabGroups.all) {
+		const input = group.activeTab?.input;
+		const uri = input instanceof vscode.TabInputCustom || input instanceof vscode.TabInputText ? input.uri : undefined;
+		if (uri?.scheme === 'file' && imageFile.test(uri.path)) {
+			out.push({ path: uri.fsPath, active: group.isActive });
+		}
+	}
+	return out;
+}
+
+const visibleImagesTool: BridgeTool = {
+	definition: {
+		name: 'visible_images',
+		description: 'Image files (PNG, JPEG, GIF, WebP) the user has on screen: the front tab of each editor group. Returns their paths; read a path with the Read tool to see the image.',
+		inputSchema: { type: 'object', properties: {} },
+	},
+	async call() {
+		const images = visibleImages();
+		return text(images.length ? images.map(i => `- ${i.path}${i.active ? ' (active)' : ''}`).join('\n') : 'No image files are on screen.');
+	},
+};
+
 export function allTools(info: () => object): BridgeTool[] {
 	const forwardedNow = forwardedTools();
 	const browser = forwardedNow.some(t => t.definition.name === 'list_browser_pages') ? [sharedBrowserPages] : [];
-	return [getDiagnostics, renameSymbol, executeCommand, listCommands, openFiles, listWorkspacesTool(info), ...forwardedNow, ...browser];
+	return [getDiagnostics, renameSymbol, executeCommand, listCommands, openFiles, listWorkspacesTool(info), visibleImagesTool, ...forwardedNow, ...browser];
 }

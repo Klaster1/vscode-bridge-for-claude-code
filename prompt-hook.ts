@@ -1,16 +1,17 @@
-// Claude Code UserPromptSubmit hook: tells Claude which integrated-browser
-// pages the user has shared with the agent in the VS Code window of this
-// session, the way Claude Code itself adds the open file. It runs before each
-// prompt is sent.
+// Claude Code UserPromptSubmit hook: tells Claude what the user has in view in
+// the VS Code window of this session and Claude Code itself does not report:
+// integrated-browser pages shared with the agent, and image files open in an
+// editor group. It runs before each prompt is sent.
 //
 // Reads the hook payload from stdin (JSON with the session's `cwd`), finds that
 // window's bridge the same way launcher.ts does, asks it over MCP for
-// shared_browser_pages without snapshots, and prints
+// shared_browser_pages without snapshots and for visible_images, and prints
 // {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-// "additionalContext": "..."}}, which Claude Code adds to the prompt.
+// "additionalContext": "..."}}, which Claude Code adds to the prompt. A hook
+// adds text only, so an image goes in as its path for Claude to read.
 //
-// Prints nothing, and exits 0, when no page is shared, when the bridge is off
-// or unreachable, on any error, and after 900 ms at most, so it can never
+// Prints nothing, and exits 0, when there is nothing to report, when the bridge
+// is off or unreachable, on any error, and after 900 ms at most, so it can never
 // block or fail a prompt.
 //
 //   node prompt-hook.ts      (Node 22.18+, payload on stdin)
@@ -30,8 +31,13 @@ async function readStdin(): Promise<string> {
 	return data;
 }
 
-/** Sends newline-delimited JSON-RPC and resolves each reply by its id. */
-function mcpCall(pipe: string, token: string, messages: object[], lastId: number): Promise<unknown> {
+type ToolResult = { content?: { type: string; text?: string }[]; isError?: boolean };
+
+/**
+ * Sends newline-delimited JSON-RPC and resolves with each reply's result by
+ * its id, once every id in `ids` has a reply. An error reply maps to undefined.
+ */
+function mcpCall(pipe: string, token: string, messages: object[], ids: number[]): Promise<Map<number, ToolResult | undefined>> {
 	return new Promise((resolve, reject) => {
 		const socket = connect(pipe, () => {
 			socket.write(`${token}\n`);
@@ -39,6 +45,7 @@ function mcpCall(pipe: string, token: string, messages: object[], lastId: number
 				socket.write(`${JSON.stringify(m)}\n`);
 			}
 		});
+		const results = new Map<number, ToolResult | undefined>();
 		let buffer = '';
 		socket.on('data', chunk => {
 			buffer += String(chunk);
@@ -46,13 +53,12 @@ function mcpCall(pipe: string, token: string, messages: object[], lastId: number
 			while ((newline = buffer.indexOf('\n')) >= 0) {
 				const line = buffer.slice(0, newline);
 				buffer = buffer.slice(newline + 1);
-				const reply = JSON.parse(line) as { id?: number; result?: unknown; error?: unknown };
-				if (reply.id === lastId) {
-					socket.end();
-					if (reply.error) {
-						reject(new Error(JSON.stringify(reply.error)));
-					} else {
-						resolve(reply.result);
+				const reply = JSON.parse(line) as { id?: number; result?: ToolResult; error?: unknown };
+				if (reply.id !== undefined && ids.includes(reply.id)) {
+					results.set(reply.id, reply.error ? undefined : reply.result);
+					if (ids.every(id => results.has(id))) {
+						socket.end();
+						resolve(results);
 					}
 				}
 			}
@@ -62,26 +68,44 @@ function mcpCall(pipe: string, token: string, messages: object[], lastId: number
 	});
 }
 
+const textOf = (result: ToolResult | undefined): string =>
+	result && !result.isError ? (result.content ?? []).map(c => c.text ?? '').join('\n') : '';
+
 try {
 	const payload = JSON.parse(await readStdin()) as { cwd?: string };
 	const record = findRecord(payload.cwd ?? process.cwd());
 	if (record) {
 		// The SDK server answers requests in order, so the initialize handshake
-		// and the call can go out together.
-		const result = await mcpCall(record.pipe, record.token, [
+		// and the calls can go out together.
+		const results = await mcpCall(record.pipe, record.token, [
 			{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'vscode-tools-bridge-prompt-hook', version: '0' } } },
 			{ jsonrpc: '2.0', method: 'notifications/initialized' },
 			{ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'shared_browser_pages', arguments: { snapshot: false } } },
-		], 2) as { content?: { type: string; text?: string }[]; isError?: boolean };
-		const listing = (result.content ?? []).map(c => c.text ?? '').join('\n');
-		if (!result.isError && listing.includes('Page ID:')) {
-			const context = [
+			{ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'visible_images', arguments: {} } },
+		], [2, 3]);
+		const sections: string[] = [];
+		const pages = textOf(results.get(2));
+		if (pages.includes('Page ID:')) {
+			sections.push([
 				'Browser pages the user has shared with you in VS Code\'s integrated browser (this reflects the moment the prompt was sent):',
 				'',
-				listing,
+				pages,
 				'',
 				'To see a page, call the vscode-tools MCP server\'s read_page (text snapshot) or screenshot_page with its page ID; shared_browser_pages lists them again with snapshots.',
-			].join('\n');
+			].join('\n'));
+		}
+		const images = textOf(results.get(3));
+		if (images.startsWith('- ')) {
+			sections.push([
+				'Image files the user has on screen in VS Code, one per editor group (this reflects the moment the prompt was sent):',
+				'',
+				images,
+				'',
+				'To see an image, read its file with the Read tool.',
+			].join('\n'));
+		}
+		if (sections.length) {
+			const context = sections.join('\n\n');
 			// Exit only once the write is flushed; stdout may be asynchronous on a pipe.
 			process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context } }), () => process.exit(0));
 			await new Promise(() => undefined);

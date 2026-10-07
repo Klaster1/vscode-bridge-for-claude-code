@@ -13,7 +13,8 @@ It has three parts:
 - **`launcher.ts`** is the stdio MCP server that Claude Code starts. It finds the
   window for its working directory and passes bytes both ways.
 - **`prompt-hook.ts`** is an optional `UserPromptSubmit` hook. Before each
-  prompt, it tells Claude which integrated-browser pages you have shared with it.
+  prompt, it tells Claude which integrated-browser pages you have shared with it
+  and which image files you have on screen.
 
 Nothing is built. VS Code's extension host and Node 22.18+ run the `.ts` files
 directly by stripping their types.
@@ -28,6 +29,7 @@ directly by stripping their types.
 | `list_commands` | Lists the command IDs that `execute_command` may run, filtered by a substring. |
 | `open_files` | Opens files in the editor so you can see them. Add `:line` to a path to jump to that line; `background: true` keeps focus where it is. |
 | `list_workspaces` | The window's workspace name, workspace file and folders, plus the bridge's pipe and discovery file, for debugging. |
+| `visible_images` | Image files (PNG, JPEG, GIF, WebP) in the front tab of each editor group, with their paths. Claude reads a path with its Read tool to see the image. |
 | `shared_browser_pages` | Integrated-browser pages shared with the agent: the ones you shared with the page toolbar's **Share with Agent** button, and any Claude opened. Returns each page's ID, title, URL and, unless `snapshot` is false, its text snapshot. |
 
 Tools forwarded from VS Code and Copilot keep their own schemas and
@@ -53,12 +55,15 @@ it. To skip the dialog, turn on `vscodeToolsBridge.autoApprove` and start VS Cod
 with the extension's proposed API enabled (see [Setup](#setup), step 4). Without
 the proposed API, VS Code ignores the approval and the dialog still shows.
 
-### Shared pages in every prompt
+### Shared pages and images in every prompt
 
 With the prompt hook installed, a prompt sent while you have a page shared
 reaches Claude with a note listing the shared pages' IDs, titles and URLs. Claude
-then knows what "this page" means without being told to look. The hook adds
-nothing when no page is shared or the bridge is off. It gives up after 900 ms and
+then knows what "this page" means without being told to look. A prompt sent
+while an image file is in front in an editor group gets a note with the image's
+path, which Claude reads to see it. Claude Code's own IDE context follows only
+the active text editor, and an image opens in the image preview. The hook adds
+nothing when there is nothing to report or the bridge is off. It gives up after 900 ms and
 never fails a prompt.
 
 ## Setup

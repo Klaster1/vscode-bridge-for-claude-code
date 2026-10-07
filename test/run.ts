@@ -206,6 +206,18 @@ try {
 	});
 	await expectText('list_commands', 'list_commands', { filter: 'editor.action.formatDocument' }, /editor\.action\.formatDocument/);
 	await expectText('open_files', 'open_files', { paths: ['src/use.ts:3'] }, /use\.ts/);
+	await expectText('visible_images, text tab in front', 'visible_images', {}, /No image files/);
+	{
+		// A 1×1 PNG; vscode.open shows it in the image preview, as a click in the explorer does.
+		writeFileSync(join(workspace, 'shot.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+		await call('execute_command', { command: 'vscode.open', args: [{ $uri: 'shot.png' }] });
+		await new Promise(r => setTimeout(r, 2000));
+		await expectText('visible_images sees the image preview', 'visible_images', {}, /shot\.png \(active\)/);
+		const h = runHook(workspace);
+		const context = hookContext(h.stdout) ?? '';
+		results.push({ name: 'prompt hook reports the image', ok: h.status === 0 && /shot\.png \(active\)/.test(context) && /Read tool/.test(context), note: `${h.ms} ms` });
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.
 	await check('terminal setup', async () => {
