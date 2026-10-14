@@ -1,6 +1,16 @@
-# VS Code Bridge for Claude Code
+[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://vshymanskyy.github.io/StandWithUkraine)
+[![Support Ukraine Badge](https://bit.ly/support-ukraine-now)](https://github.com/support-ukraine/support-ukraine)
 
-A VS Code extension that gives Claude Code (the CLI) the tools and the screen of the VS Code window it works in.
+# <img src="icon.png" alt="" width="40" height="40" align="top"> VS Code Bridge for Claude Code
+
+A VS Code extension and a Claude Code plugin. Claude Code sees what you see in VS Code.
+
+- **Your browser pages:** press **Share with Agent**, and Claude reads, screenshots and clicks the page.
+- **Your selection:** text you select in the Markdown Editor, and the image in front, reach Claude with your prompt ([microsoft/vscode#271104](https://github.com/microsoft/vscode/issues/271104)).
+- **VS Code's tools:** type errors, rename, go to definition and any command, as an MCP server.
+- **Chat links:** a file link in Claude Code's chat opens in the editor you chose (fixes [anthropics/claude-code#81482](https://github.com/anthropics/claude-code/issues/81482)).
+
+You need VS Code 1.140 or later, Node 22.18 or later and Claude Code. [Install](#install) the extension and the plugin, then start `claude` in a folder of the VS Code window.
 
 ## Claude uses VS Code's tools
 

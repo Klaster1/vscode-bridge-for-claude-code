@@ -29,6 +29,9 @@ and Claude Code at runtime so that Claude sees what the user has open.
     finds the window for a folder. The extension imports it from here.
   - `skills/`: the skills that show Claude how to use the tools. `src/instructions.ts` names
     them.
+- `docs/icon.svg`: the source of the extension icon. `scripts/generate-icon.ts` renders it to `icon.png`,
+  which `package.json` names. `npm run icon` and `npm run package` run it, and `test/icon-check.ts`
+  fails when the committed PNG is stale. Edit the SVG, never the PNG.
 - `setup.ts` (`npm run setup`): installs from a clone: the VSIX into VS Code, and the plugin from
   the clone, where it loads in place. The `.claude/skills/install-vscode-bridge-for-claude-code/` skill
   runs it and makes the `argv.json` edit.

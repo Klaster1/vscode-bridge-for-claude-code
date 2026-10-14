@@ -3,7 +3,13 @@
   "displayName": "VS Code Bridge for Claude Code",
   "description": "Gives Claude Code a VS Code window's tools, and shows it what you have open.",
   "publisher": "klaster1",
-  "version": "0.5.0",
+  "icon": "icon.png",
+  "galleryBanner": { "color": "#0b0e1c", "theme": "dark" },
+  "keywords": ["claude", "claude code", "anthropic", "mcp", "model context protocol", "ai agent", "diagnostics", "language server", "browser"],
+  "homepage": "https://github.com/Klaster1/vscode-bridge-for-claude-code#readme",
+  "repository": { "type": "git", "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code.git" },
+  "bugs": { "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code/issues" },
+  "version": "0.5.1",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -71,8 +77,10 @@
   "scripts": {
     "setup": "node setup.ts",
     "typecheck": "tsc -p .",
-    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts",
-    "package": "vsce package --allow-missing-repository --allow-star-activation --no-rewrite-relative-links",
+    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/icon-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts",
+    "icon": "node scripts/generate-icon.ts",
+    "prepackage": "npm run icon",
+    "package": "vsce package --allow-star-activation --no-rewrite-relative-links",
     "screenshots": "node scripts/generate-screenshots.ts",
     "check-screenshots": "node scripts/check-screenshots.ts"
   },
@@ -81,6 +89,7 @@
     "@vscode/prompt-tsx": "^0.4.0-alpha.9"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^24.13.6",
     "@types/vscode": "^1.140.0",
     "@vscode/test-electron": "^3.1.0",

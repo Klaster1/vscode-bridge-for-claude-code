@@ -26,6 +26,8 @@
 		mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
 	}
 	.text { position: absolute; left: 34px; top: 50%; transform: translateY(-50%); width: 272px; }
+	.brand { display: flex; align-items: center; gap: 9px; }
+	.mark { width: 30px; height: 30px; }
 	.eyebrow {
 		display: inline-flex; align-items: center; gap: 6px;
 		font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
@@ -67,17 +69,17 @@
 </head>
 <body>
 	<div class="text">
-		<div class="eyebrow">VS Code <span class="arrows">⇄</span> Claude Code</div>
+		<div class="brand"><img class="mark" src="../icon.png" alt=""><div class="eyebrow">VS Code <span class="arrows">⇄</span> Claude Code</div></div>
 		<h1>VS Code Bridge<br>for <span class="accent">Claude Code</span></h1>
 		<p>Claude Code gets your VS Code window: its tools, your browser, your selection.</p>
 		<div class="features"><span>VS Code tools over MCP</span><span>Shared browser pages</span><span>Markdown Editor selection</span></div>
 	</div>
 	<div class="stage">
 		<div class="deck">
-			<div class="card browser" data-src="browser-shared-page.png" data-crop="914 0 974 560" data-width="240" data-ring="1424 88 252 46"></div>
-			<div class="card markdown" data-src="markdown-selection-chip.png" data-crop="40 590 960 280" data-width="250"></div>
+			<div class="card browser" data-src="browser-shared-page.png" data-crop="914 0 974 560" data-width="240"></div>
+			<div class="card markdown" data-src="markdown-selection-chip.png" data-crop="40 590 900 263" data-width="250"></div>
 			<svg class="link" viewBox="0 0 640 320"><path d="M 470 224 C 500 228, 506 236, 494 247" fill="none" stroke="#ec8a63" stroke-width="1.6" stroke-dasharray="3 3" stroke-linecap="round"/></svg>
-			<div class="card chip" data-src="markdown-selection-chip.png" data-crop="1171 1120 1083 152" data-width="272" data-ring="1556 1212 232 46"></div>
+			<div class="card chip" data-src="markdown-selection-chip.png" data-crop="1171 1120 1083 152" data-width="272"></div>
 		</div>
 	</div>
 	<script>

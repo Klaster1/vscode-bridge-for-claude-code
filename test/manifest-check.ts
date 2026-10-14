@@ -12,7 +12,7 @@ import { check, finish } from './harness.ts';
 import { reachableFiles } from './imports.ts';
 
 const root = join(import.meta.dirname, '..');
-const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { activationEvents: string[]; scripts: Record<string, string> };
+const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { activationEvents: string[]; icon?: string; scripts: Record<string, string> };
 
 await check('the package script allows the * activation event, so vsce does not stop to ask in a terminal', () => {
 	assert.ok(manifest.activationEvents.includes('*'));
@@ -26,6 +26,16 @@ const vsixFiles = execFileSync(process.execPath, [join(root, 'node_modules', '@v
 await check('the VSIX holds only tracked files and node_modules', () => {
 	const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0'));
 	assert.deepEqual(vsixFiles.filter(path => !tracked.has(path)), []);
+});
+
+await check('the manifest names a square PNG icon of at least 128 px, and the VSIX holds it', () => {
+	assert.ok(manifest.icon, 'package.json has no icon');
+	const png = readFileSync(join(root, manifest.icon));
+	assert.equal(png.subarray(1, 4).toString(), 'PNG');
+	const width = png.readUInt32BE(16);
+	assert.equal(png.readUInt32BE(20), width, 'the icon is not square');
+	assert.ok(width >= 128, `the icon is ${width} px wide`);
+	assert.ok(vsixFiles.includes(manifest.icon));
 });
 
 await check('the VSIX holds every file the extension imports, plugin/scripts/discovery.ts included', () => {
