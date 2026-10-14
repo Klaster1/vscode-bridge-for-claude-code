@@ -43,7 +43,7 @@ interface Editor {
 	updated: number;
 }
 
-export interface MarkdownEditorState {
+interface MarkdownEditorState {
 	uri: vscode.Uri;
 	active: boolean;
 	/** Absent when the editor has not reported a selection. Lines are 1-based; an empty `text` means a cursor. */

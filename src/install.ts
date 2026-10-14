@@ -63,7 +63,7 @@ const writeSettings = (file: string, settings: Settings): void => {
 };
 
 /** Puts the hook into Claude Code's settings, replacing any entry that runs prompt-hook. Throws when the file is not plain JSON. */
-export function addHook(file: string, command: string): void {
+function addHook(file: string, command: string): void {
 	const settings = readSettings(file) ?? {};
 	const hooks = (settings.hooks ??= {});
 	const kept = (hooks.UserPromptSubmit ?? [])

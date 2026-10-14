@@ -52,7 +52,7 @@ export function ensureDiscoveryDir(): string {
  * lower-cased on Windows, where VS Code and a shell can disagree on the case of
  * the drive letter.
  */
-export function folderKey(folder: string): string {
+function folderKey(folder: string): string {
 	let path = resolve(folder);
 	try {
 		path = realpathSync.native(path);

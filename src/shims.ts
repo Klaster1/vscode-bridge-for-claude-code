@@ -14,7 +14,7 @@ import { discoveryDir } from './discovery.ts';
  * folder is under ~/.cache, which cleaners may empty, and the shims must stay where Claude
  * Code's config says, so they go under ~/.local/share.
  */
-export function shimDir(): string {
+function shimDir(): string {
 	return process.platform === 'win32' || process.env['VSCODE_TOOLS_BRIDGE_DIR']
 		? discoveryDir()
 		: join(homedir(), '.local', 'share', 'vscode-tools-bridge');

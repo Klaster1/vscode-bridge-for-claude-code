@@ -9,7 +9,7 @@ import { safeStringify, toolResultToContent } from './render.ts';
 
 type Args = Record<string, unknown>;
 
-export interface BridgeTool {
+interface BridgeTool {
 	definition: Tool;
 	call(args: Args, token: vscode.CancellationToken): Promise<CallToolResult>;
 }
@@ -302,7 +302,7 @@ const openFiles: BridgeTool = {
 	},
 };
 
-export function listWorkspacesTool(info: () => object): BridgeTool {
+function listWorkspacesTool(info: () => object): BridgeTool {
 	return {
 		definition: {
 			name: 'list_workspaces',
