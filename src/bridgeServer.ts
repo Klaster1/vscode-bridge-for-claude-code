@@ -9,6 +9,8 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { discoveryDir, discoveryFile, ensureDiscoveryDir, folderHash, type DiscoveryRecord } from './discovery.ts';
 
+const HANDSHAKE_MS = 5_000; // A client has this long to send the token.
+
 export interface Listening {
 	server: NetServer;
 	file: string;
@@ -86,6 +88,10 @@ export function createBridgeListener(handlers: BridgeHandlers) {
 function acceptConnection(socket: Socket, token: string, handlers: BridgeHandlers): void {
 	let buffered = Buffer.alloc(0);
 	const expected = Buffer.from(token);
+	socket.setTimeout(HANDSHAKE_MS, () => {
+		handlers.warn('Closed a connection that sent no token in time.');
+		socket.destroy();
+	});
 	const onData = (chunk: Buffer) => {
 		buffered = Buffer.concat([buffered, chunk]);
 		const newline = buffered.indexOf(0x0a);
@@ -102,6 +108,7 @@ function acceptConnection(socket: Socket, token: string, handlers: BridgeHandler
 			socket.destroy();
 			return;
 		}
+		socket.setTimeout(0); // Served connections may idle.
 		const input = new PassThrough();
 		input.write(buffered.subarray(newline + 1));
 		socket.pipe(input);

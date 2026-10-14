@@ -5,7 +5,7 @@
 
 import { strict as assert } from 'node:assert';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { Server } from 'node:net';
+import { connect, Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBridgeListener } from '../src/bridgeServer.ts';
@@ -60,6 +60,30 @@ await check('a stop while a start is listening leaves no server and no discovery
 	assert.ok(bridge.current === undefined, 'a bridge is current after the stop');
 	assert.deepEqual(servers.map(s => s.listening), [false]);
 	assert.equal(existsSync(discoveryFile(workspace('three'))), false);
+});
+
+await check('a connection that sends no token is closed, and one that sent it may idle', async () => {
+	const served: Socket[] = [];
+	const bridge = createBridgeListener({ ...handlers, serve: (_input, socket) => void served.push(socket) });
+	const { record } = (await bridge.start(workspace('four')))!;
+	const closedAfter = (socket: Socket) => new Promise<number>(resolve => {
+		const began = Date.now();
+		setTimeout(() => resolve(Infinity), 8_000).unref();
+		socket.on('close', () => resolve(Date.now() - began));
+		socket.on('error', () => undefined);
+	});
+	const silent = connect(record.pipe);
+	const partial = connect(record.pipe, () => partial.write('half a token')); // No newline.
+	const trusted = connect(record.pipe, () => trusted.write(`${record.token}\n`));
+	let trustedClosed = false;
+	trusted.on('close', () => { trustedClosed = true; });
+	const [silentMs, partialMs] = await Promise.all([closedAfter(silent), closedAfter(partial)]);
+	assert.ok(silentMs < 8_000 && partialMs < 8_000, `closed after ${silentMs} and ${partialMs} ms`);
+	await new Promise(done => setTimeout(done, 500)); // The connection that sent the token began at the same time.
+	assert.ok(!trustedClosed, 'the connection that sent the token was closed');
+	assert.equal(served.length, 1);
+	trusted.destroy();
+	bridge.stop();
 });
 
 rmSync(temp, { recursive: true, force: true });
