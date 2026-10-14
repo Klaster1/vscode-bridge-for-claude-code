@@ -1,14 +1,14 @@
 {
-	"hash": "6cf9bb8500038279d3c3eede9d6262a9a6b07ba988038de7c86566b92bbf8e9b",
+	"hash": "6b70caa7ed9e7f43d3622dc96e85e32731625d6255bf9915a03bb286ba4101a5",
 	"files": {
 		"package.json": "b33a1b545ed9aea251b60d518d59835fac6517bc8217e3866b5d6ba7ab835aa9",
-		"scripts/generate-screenshots.ts": "edaf421df9ea567039bf5f2ddebc2e73d3c1176a998d134acb5e20b10f726bd9",
+		"scripts/generate-screenshots.ts": "8cef9fe59c56fe21fcf88962f0fa92926f894f31bc3ddef3efdff7d17e00d5b8",
 		"scripts/screenshot-fixture/docs/forecast-api.md": "6ab5f1aa78e0497f6c1775eb58be2aa5fbfb3696ac63e57feb648b188eff0d42",
 		"scripts/screenshot-fixture/package.json": "57eb6bad716f2dbd4b20240a82c03702635e7e558a9e07193c2d48ba4951a2bc",
 		"scripts/screenshot-fixture/public/index.html": "884e8759adce3acfcc22a65d5c4bf5f3292e448af95d998d91b79832c60f1dac",
 		"scripts/screenshot-fixture/src/forecast.ts": "ba380663af20ea010fa398b08786ad4a883508de2b831d903d891879778a1b04",
 		"scripts/screenshot-inputs.ts": "fbb16f68b0116250cda7c890f80e749ba8d90d4ad7c794adcd76d794e66ed37d",
-		"scripts/social-preview.html": "97f87550b51689734282948835c327ceda7eaafbfe5ebc114de8a3dcd6a4dadb"
+		"scripts/social-preview.html": "6e154d5724866c202af43e130114046dfd03cd505855b0e96cf6e1386f2d9002"
 	},
 	"images": [
 		"docs/screenshots/browser-shared-page.png",

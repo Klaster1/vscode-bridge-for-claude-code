@@ -4,7 +4,7 @@
 // Code extension installed for the current user. The workspace is scripts/screenshot-fixture.
 // On success it records the inputs' hash for check-screenshots.ts.
 //
-//   npm run screenshots      (Windows, Node 22.18+; a VS Code window opens for about a minute)
+//   npm run screenshots      (Windows, Node 22.18+; about a minute, in VS Code windows kept off-screen)
 //
 // Claude Code runs signed in with a dummy API key against a local stub that answers every
 // request with 401, so no prompt reaches a model. The user's ~/.claude, ~/.claude.json, VS Code
@@ -226,9 +226,32 @@ const app = await _electron.launch({
 		'--skip-release-notes',
 		'--new-window',
 		'--force-device-scale-factor=2', // Same pixels on every display, sharp when GitHub scales the image down.
+		// The windows sit off-screen (below). Chromium would stop painting a window it counts as hidden.
+		'--disable-backgrounding-occluded-windows',
+		'--disable-renderer-backgrounding',
+		'--disable-features=CalculateNativeWinOcclusion',
 	],
 	env,
 	timeout: 90_000,
+});
+// Keeps this instance's windows off the user's screen: each one moves to -32000,-32000 when it is
+// created, and back there whenever VS Code shows or moves it. Playwright holds the app's ready event
+// until it connects, so this runs before VS Code opens its first window.
+type MovableWindow = { getPosition(): number[]; setPosition(x: number, y: number): void; on(event: 'show' | 'move', listener: () => void): void };
+type ElectronMain = { app: { on(event: 'browser-window-created', listener: (event: unknown, window: MovableWindow) => void): void }; BrowserWindow: { getAllWindows(): MovableWindow[] } };
+await app.evaluate(({ app: main, BrowserWindow }: ElectronMain) => {
+	const away = (window: MovableWindow) => {
+		if ((window.getPosition()[0] ?? 0) > -30000) {
+			window.setPosition(-32000, -32000);
+		}
+	};
+	const keepAway = (window: MovableWindow) => {
+		away(window);
+		window.on('show', () => away(window));
+		window.on('move', () => away(window));
+	};
+	BrowserWindow.getAllWindows().forEach(keepAway);
+	main.on('browser-window-created', (_event, window) => keepAway(window));
 });
 let client: Client | undefined;
 const shots: string[] = [];
@@ -281,7 +304,88 @@ try {
 		await page.screenshot({ path: join(run, 'failure.png') });
 		throw new Error(`The terminal never showed ${pattern}:\n${await terminalText()}`);
 	};
-	const shoot = async (name: string, parts: Locator[]) => {
+	// Rings and arrows drawn over the page for one shot: a ring on the thing a section is about, an arrow where something travels.
+	type Rect = { x: number; y: number; width: number; height: number };
+	// An arrow curves (bend: down leaves sideways and arrives from above, across leaves and arrives sideways),
+	// or follows via, a path through empty space with rounded corners.
+	type Mark = { ring: Rect } | { arrow: { from: [number, number]; to: [number, number]; bend?: 'down' | 'across'; via?: [number, number][] } };
+	const markScript = `(marks) => {
+	const NS = 'http://www.w3.org/2000/svg';
+	const el = (name, attrs) => { const e = document.createElementNS(NS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+	const svg = el('svg', { id: 'bridge-marks', width: innerWidth, height: innerHeight, style: 'position:fixed;left:0;top:0;pointer-events:none;z-index:2147483647;overflow:visible' });
+	const defs = el('defs', {});
+	svg.appendChild(defs);
+	document.body.appendChild(svg);
+	marks.forEach((m, i) => {
+		if (m.ring) {
+			const r = m.ring;
+			svg.appendChild(el('rect', { x: r.x - 3, y: r.y - 3, width: r.width + 6, height: r.height + 6, rx: 7, fill: 'none', stroke: 'rgba(236,138,99,0.22)', 'stroke-width': 3 }));
+			svg.appendChild(el('rect', { x: r.x, y: r.y, width: r.width, height: r.height, rx: 5, fill: 'none', stroke: '#ec8a63', 'stroke-width': 2, style: 'filter:drop-shadow(0 0 5px rgba(236,138,99,0.8))' }));
+			return;
+		}
+		const [fx, fy] = m.arrow.from, [tx, ty] = m.arrow.to;
+		const dx = tx - fx, dy = ty - fy;
+		let d, last;
+		if (m.arrow.via) {
+			const points = [m.arrow.from, ...m.arrow.via, m.arrow.to];
+			d = 'M ' + fx + ' ' + fy;
+			for (let k = 1; k < points.length - 1; k++) {
+				const [px, py] = points[k - 1], [cx, cy] = points[k], [nx, ny] = points[k + 1];
+				const before = Math.hypot(cx - px, cy - py), after = Math.hypot(nx - cx, ny - cy);
+				const r = Math.min(16, before / 2, after / 2);
+				d += ' L ' + (cx - (cx - px) * r / before) + ' ' + (cy - (cy - py) * r / before) + ' Q ' + cx + ' ' + cy + ' ' + (cx + (nx - cx) * r / after) + ' ' + (cy + (ny - cy) * r / after);
+			}
+			d += ' L ' + tx + ' ' + ty;
+			last = points[points.length - 2];
+		} else {
+			const down = m.arrow.bend === 'down';
+			const c1 = down ? [fx + 0.65 * dx, fy] : [fx + 0.5 * dx, fy];
+			const c2 = down ? [tx, ty - 0.55 * dy] : [tx - 0.5 * dx, ty];
+			d = 'M ' + fx + ' ' + fy + ' C ' + c1[0] + ' ' + c1[1] + ', ' + c2[0] + ' ' + c2[1] + ', ' + tx + ' ' + ty;
+			last = c2;
+		}
+		const gradient = el('linearGradient', { id: 'bridge-flow-' + i, gradientUnits: 'userSpaceOnUse', x1: fx, y1: fy, x2: tx, y2: ty });
+		gradient.appendChild(el('stop', { offset: 0, 'stop-color': '#3b9cf5' }));
+		gradient.appendChild(el('stop', { offset: 1, 'stop-color': '#e8805f' }));
+		defs.appendChild(gradient);
+		const glow = 'filter:drop-shadow(0 0 4px rgba(236,138,99,0.7))';
+		svg.appendChild(el('path', { d, fill: 'none', stroke: 'url(#bridge-flow-' + i + ')', 'stroke-width': 3.2, 'stroke-dasharray': '0.1 7.5', 'stroke-linecap': 'round', style: glow }));
+		const a = Math.atan2(ty - last[1], tx - last[0]);
+		const head = [0.7, -0.7].map(s => [tx - 11 * Math.cos(a + s), ty - 11 * Math.sin(a + s)]);
+		svg.appendChild(el('path', { d: 'M ' + head[0][0] + ' ' + head[0][1] + ' L ' + tx + ' ' + ty + ' L ' + head[1][0] + ' ' + head[1][1], fill: 'none', stroke: '#e8805f', 'stroke-width': 3.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', style: glow }));
+	});
+}`;
+	const rect = async (target: Locator) => (await target.boundingBox({ timeout: 5000 }))!;
+	const ring = (r: Rect, left = 6, top = 4, right = left, bottom = top): { ring: Rect } => ({ ring: { x: r.x - left, y: r.y - top, width: r.width + left + right, height: r.height + top + bottom } });
+	const union = (rects: Rect[]): Rect => {
+		const x = Math.min(...rects.map(r => r.x)), y = Math.min(...rects.map(r => r.y));
+		return { x, y, width: Math.max(...rects.map(r => r.x + r.width)) - x, height: Math.max(...rects.map(r => r.y + r.height)) - y };
+	};
+	// A block element's box spans its column; this is the box of its text.
+	type RangeDocument = { document: { createRange(): { selectNodeContents(node: unknown): void; getBoundingClientRect(): { width: number } } } };
+	const textRect = async (target: Locator): Promise<Rect> => {
+		const width = await target.evaluate((el: unknown) => {
+			const { document } = globalThis as unknown as RangeDocument;
+			const range = document.createRange();
+			range.selectNodeContents(el);
+			return range.getBoundingClientRect().width;
+		});
+		return { ...(await rect(target)), width };
+	};
+	const terminalLine = async (pattern: RegExp): Promise<Rect> => {
+		const boxes: Rect[] = [];
+		for (const run of await panelPart.locator('.xterm-rows > div').filter({ hasText: pattern }).locator('span').all()) {
+			const text = (await run.textContent()) ?? '';
+			const trimmed = text.trim();
+			const box = await run.boundingBox();
+			if (box && trimmed && trimmed !== '❯') {
+				const cell = box.width / text.length; // A run's box includes its spaces; the font is monospaced.
+				boxes.push({ ...box, x: box.x + (text.length - text.trimStart().length) * cell, width: trimmed.length * cell });
+			}
+		}
+		return union(boxes);
+	};
+	const shoot = async (name: string, parts: Locator[], marks: () => Promise<Mark[]> = async () => []) => {
 		await page.mouse.move(-1, -1); // Off the window: nothing shows a hover state or a tooltip.
 		await sleep(400);
 		await page.evaluate(() => new Promise<void>(r => { const g = globalThis as unknown as PageGlobals; g.requestAnimationFrame(() => g.requestAnimationFrame(r)); }));
@@ -289,7 +393,14 @@ try {
 		const x = Math.min(...boxes.map(b => b.x));
 		const y = Math.min(...boxes.map(b => b.y));
 		const clip = { x, y, width: Math.max(...boxes.map(b => b.x + b.width)) - x, height: Math.max(...boxes.map(b => b.y + b.height)) - y };
+		const drawn = await marks();
+		if (drawn.length) {
+			await page.evaluate(`(${markScript})(${JSON.stringify(drawn)})`);
+		}
 		await page.screenshot({ path: join(out, name), clip });
+		if (drawn.length) {
+			await page.evaluate("document.getElementById('bridge-marks')?.remove()");
+		}
 		shots.push(name);
 		console.log(`Saved ${name} at ${Math.round((Date.now() - started) / 1000)} s`);
 	};
@@ -355,7 +466,11 @@ try {
 	const claude = await openClaudePanel();
 	await selectCaching();
 	await claude.getByText(/\d+ lines? selected/).waitFor();
-	await shoot('markdown-selection-chip.png', [editorPart]);
+	await shoot('markdown-selection-chip.png', [editorPart], async () => {
+		const chip = ring(await rect(claude.getByText(/\d+ lines? selected/)), 26, 6, 26, 6);
+		const selection = await rect((await frameWith(markdownText)).getByText('Responses stay in the cache'));
+		return [chip, { arrow: { from: [selection.x + selection.width + 8, selection.y + selection.height / 2], to: [chip.ring.x + chip.ring.width / 2, chip.ring.y - 5], bend: 'down' } }];
+	});
 
 	// A chat link opening in the Markdown Editor.
 	await command('workbench.action.closeAllGroups');
@@ -365,7 +480,16 @@ try {
 	await resumed.getByRole('button', { name: 'Send message' }).and(resumed.locator('[data-permission-mode="auto"]')).waitFor(); // A resumed session shows Manual until its mode loads.
 	await resumed.getByRole('link', { name: 'forecast-api.md' }).click();
 	await frameWith(markdownText);
-	await shoot('chat-link.png', [editorPart]);
+	await shoot('chat-link.png', [editorPart], async () => {
+		const link = ring(await rect(resumed.getByRole('link', { name: 'forecast-api.md' })), 3, 3);
+		const heading = ring(await textRect((await frameWith(markdownText)).getByRole('heading', { name: 'Forecast API' })), 10, 4);
+		const reply = await rect(resumed.getByText(/covers it/));
+		const down = link.ring.x + link.ring.width - 10; // Right of the reply's second line.
+		const below = reply.y + reply.height + 34; // Under the reply's buttons.
+		const lane = heading.ring.x - 22; // The opened file's empty left margin.
+		const level = heading.ring.y + heading.ring.height / 2;
+		return [link, heading, { arrow: { from: [down, link.ring.y + link.ring.height + 3], via: [[down, below], [lane, below], [lane, level]], to: [heading.ring.x - 5, level] } }];
+	});
 	await command('workbench.action.closeAllGroups');
 
 	// The CLI in the terminal, connected to the window, with the Markdown Editor's selection.
@@ -375,7 +499,9 @@ try {
 	await waitForTerminal(/shift\+tab to cycle/);
 	await selectCaching();
 	await waitForTerminal(/\d+ lines? selected/);
-	await shoot('cli-selection.png', [editorPart, panelPart]);
+	await shoot('cli-selection.png', [editorPart, panelPart], async () => {
+		return [ring(await terminalLine(/lines? selected/), 4, 3)];
+	});
 
 	// /mcp lists vscode-tools as connected.
 	await resize(1000, 400);
@@ -385,7 +511,9 @@ try {
 	await sleep(500);
 	await page.keyboard.press('Enter');
 	await waitForTerminal(/vscode-tools\s+\d+ tools/);
-	await shoot('mcp-connected.png', [panelPart]);
+	await shoot('mcp-connected.png', [panelPart], async () => {
+		return [ring(await terminalLine(/vscode-tools\s+\d+ tools/), 4, 1)];
+	});
 	await page.keyboard.press('Escape');
 	await resize(1200, 720);
 	await command('workbench.action.toggleMaximizedPanel');
@@ -398,7 +526,7 @@ try {
 	await page.getByRole('button', { name: 'Share with Agent' }).click();
 	await page.locator('.monaco-dialog-box').getByRole('button', { name: 'Allow' }).click();
 	await page.getByText('Sharing with Agent').waitFor();
-	await shoot('browser-shared-page.png', [editorPart]);
+	await shoot('browser-shared-page.png', [editorPart], async () => [ring(await rect(page.getByText('Sharing with Agent')), 10, 6, 30, 6)]);
 
 	// The repository's social preview, composed from the shots above by scripts/social-preview.html.
 	// It renders in a window of this Electron, so it needs no browser download, and loads over HTTP
