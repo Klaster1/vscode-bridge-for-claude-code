@@ -74,12 +74,18 @@ export function discoveryFile(folder: string): string {
 /**
  * The record of the window registered under `start` or its nearest ancestor
  * that has one, so a session started in a subfolder still finds its window.
+ * A file that cannot be read or parsed, such as one the window is rewriting,
+ * gives undefined instead of the ancestor's record, which may be another window's.
  */
 export function findRecord(start: string): DiscoveryRecord | undefined {
 	for (let dir = resolve(start); ; dir = dirname(dir)) {
 		const file = discoveryFile(dir);
 		if (existsSync(file)) {
-			return JSON.parse(readFileSync(file, 'utf8')) as DiscoveryRecord;
+			try {
+				return JSON.parse(readFileSync(file, 'utf8')) as DiscoveryRecord;
+			} catch {
+				return undefined;
+			}
 		}
 		if (dirname(dir) === dir) {
 			return undefined;
