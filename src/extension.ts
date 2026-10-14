@@ -26,8 +26,10 @@ const bridge = createBridgeListener({
 	warn: message => log.warn(message),
 	debug: message => log.debug(message),
 });
+let version: string;
 
 export function activate(context: vscode.ExtensionContext): void {
+	version = (context.extension.packageJSON as { version: string }).version;
 	log = vscode.window.createOutputChannel('VS Code Bridge for Claude Code', { log: true });
 	context.subscriptions.push(log, { dispose: bridge.stop }, { dispose: () => syncPatches(true) });
 	// Opens the Settings editor at one of this extension's settings, for the links in the README. Only `id` counts; other parameters, such as one a redirect adds, are ignored.
@@ -123,7 +125,6 @@ async function start(): Promise<void> {
 }
 
 async function serveMcp(input: PassThrough, socket: Socket): Promise<void> {
-	const version = String((vscode.extensions.getExtension('local.vscode-tools-bridge')?.packageJSON as { version?: string } | undefined)?.version ?? '0.0.0');
 	const server = new Server({ name: 'vscode-tools-bridge', version }, { capabilities: { tools: {} }, instructions: serverInstructions });
 	const info = () => ({
 		...(bridge.current ? { folder: bridge.current.record.folder, pipe: bridge.current.record.pipe, discoveryFile: bridge.current.file } : {}),
