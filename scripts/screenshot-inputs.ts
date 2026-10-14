@@ -3,14 +3,13 @@
 // generate-screenshots.ts, which records the hash, and check-screenshots.ts, which compares it.
 
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-/** Repo-relative files and folders whose contents the images depend on. */
-export const inputPaths = [
-	'src', // The extension: its tools, settings handling, selection and chat-link patches.
-	'package.json', // The settings the Settings shot lists, and the activation events.
-	'launcher.ts', // What /mcp starts to reach the window.
+/** Repo-relative files and folders whose contents the images depend on. Only git-tracked files count. */
+const inputPaths = [
+	'package.json', // The settings the Settings shot lists, the name and the description. Its version does not count.
 	'scripts/generate-screenshots.ts',
 	'scripts/screenshot-inputs.ts', // Changes what counts as an input.
 	'scripts/screenshot-fixture',
@@ -31,23 +30,25 @@ export interface InputRecord {
 	claudeCode: string;
 }
 
-const listFiles = (root: string, path: string): string[] => {
-	const full = join(root, path);
-	if (!existsSync(full)) {
-		return [];
-	}
-	if (!statSync(full).isDirectory()) {
-		return [path];
-	}
-	return readdirSync(full).flatMap(name => listFiles(root, `${path}/${name}`));
+/** The tracked inputs. An untracked file, such as an editor backup, is in no one else's checkout, so it must not count. */
+const listFiles = (root: string): string[] =>
+	execFileSync('git', ['ls-files', '-z', '--', ...inputPaths], { cwd: root, encoding: 'utf8' })
+		.split('\0')
+		.filter(path => path && existsSync(join(root, path)));
+
+/** package.json minus its version, so a release does not make the screenshots stale. */
+const withoutVersion = (json: string): string => {
+	const { version: _version, ...rest } = JSON.parse(json) as { version?: string };
+	return JSON.stringify(rest, null, 2);
 };
 
 /** Hashes the inputs with line endings as LF, so Windows and Linux checkouts agree. */
 export function hashInputs(root: string): Pick<InputRecord, 'hash' | 'files'> {
 	const files: Record<string, string> = {};
 	const all = createHash('sha256');
-	for (const path of inputPaths.flatMap(p => listFiles(root, p)).map(p => relative(root, join(root, p)).replaceAll('\\', '/')).sort()) {
-		const contents = Buffer.from(readFileSync(join(root, path)).toString('latin1').replaceAll('\r\n', '\n'), 'latin1');
+	for (const path of listFiles(root).sort()) {
+		const text = readFileSync(join(root, path)).toString('latin1').replaceAll('\r\n', '\n');
+		const contents = Buffer.from(path === 'package.json' ? withoutVersion(text) : text, 'latin1');
 		files[path] = createHash('sha256').update(contents).digest('hex');
 		all.update(`${path}\0${files[path]}\n`);
 	}

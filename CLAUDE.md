@@ -95,10 +95,16 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
 ## Screenshots
 
 The README images and `docs/social.png` come from `npm run screenshots`. It runs only locally:
-it drives a real VS Code with the real Claude Code extension and makes no model calls. A change
-to `src/`, `package.json`, `launcher.ts` or anything under `scripts/` that shapes the images
-gets a fresh run, and the new images and `docs/screenshots/inputs.json` go into the same commit.
-`npm run check-screenshots` fails when the recorded input hash no longer matches, and CI runs it.
+it drives a real VS Code with the real Claude Code extension and makes no model calls.
+
+When a change alters what a screenshot shows, regenerate the images, and commit them with
+`docs/screenshots/inputs.json` in the same commit. The agent that makes the change does this.
+A change to `src/` can alter a shot without changing the hash, so check that by eye.
+
+`npm run check-screenshots` covers the inputs listed in `scripts/screenshot-inputs.ts`: the
+git-tracked files of `package.json` without its `version`, the screenshot script and its
+fixture, and the social preview page. It fails when the recorded input hash no longer matches or
+an image is missing, and CI runs it.
 
 ## Versioning
 
