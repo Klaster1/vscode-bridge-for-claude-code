@@ -142,8 +142,8 @@ tab. The release workflow uses the top section as the GitHub Release notes.
 
 `.github/workflows/ci.yml` has two jobs.
 
-- `test` runs on every push and pull request, on a Windows runner, because the end-to-end test
-  drives real VS Code windows. It runs `npm ci`, `npm run typecheck`, `npm test` and
+- `test` runs on every pull request and every push to `main`, on a Windows runner, because the
+  end-to-end test drives real VS Code windows. It runs `npm ci`, `npm run typecheck`, `npm test` and
   `npm run check-screenshots`, then builds the VSIX with `npm run package` and uploads it. CI uses
   no tokens and never makes screenshots.
 - `release` runs after `test` passes on a push to `main`. If the tag `v<version>` does not
