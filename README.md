@@ -1,9 +1,7 @@
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://vshymanskyy.github.io/StandWithUkraine)
 [![Support Ukraine Badge](https://bit.ly/support-ukraine-now)](https://github.com/support-ukraine/support-ukraine)
 
-<img src="icon.png" alt="" width="96" align="right">
-
-# VS Code Bridge for Claude Code
+# <img src="icon.png" alt="" width="40" height="40" align="top"> VS Code Bridge for Claude Code
 
 A VS Code extension and a Claude Code plugin. Claude Code sees what you see in VS Code.
 
