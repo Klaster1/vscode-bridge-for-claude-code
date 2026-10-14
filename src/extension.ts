@@ -121,8 +121,10 @@ async function start(): Promise<void> {
 		log.info('No local workspace folder; bridge not started.');
 		return;
 	}
-	const { record, file } = await bridge.start(folder.uri.fsPath);
-	log.info(`Listening on ${record.pipe} for ${record.folder} (discovery file ${file})`);
+	const listening = await bridge.start(folder.uri.fsPath);
+	if (listening) {
+		log.info(`Listening on ${listening.record.pipe} for ${listening.record.folder} (discovery file ${listening.file})`);
+	}
 }
 
 async function serveMcp(input: PassThrough, socket: Socket): Promise<void> {

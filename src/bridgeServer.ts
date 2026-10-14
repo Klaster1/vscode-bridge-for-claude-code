@@ -24,8 +24,12 @@ export interface BridgeHandlers {
 
 export function createBridgeListener(handlers: BridgeHandlers) {
 	let current: Listening | undefined;
+	let generation = 0; // Each stop takes a new number, so a start can tell that a stop or a newer start came in while it began to listen.
 
-	async function start(folder: string): Promise<Listening> {
+	/** Replaces a running bridge. Resolves with the new one, or with undefined when a stop or a newer start came in before it was listening. */
+	async function start(folder: string): Promise<Listening | undefined> {
+		stop();
+		const mine = generation;
 		const hash = folderHash(folder);
 		const record: DiscoveryRecord = {
 			pipe: process.platform === 'win32'
@@ -41,6 +45,10 @@ export function createBridgeListener(handlers: BridgeHandlers) {
 			server.once('error', reject);
 			server.listen(record.pipe, resolve);
 		});
+		if (mine !== generation) {
+			server.close();
+			return undefined;
+		}
 		const file = discoveryFile(folder);
 		// A second window on the same first folder takes over the file; the
 		// earlier window keeps its pipe but is no longer found.
@@ -50,6 +58,7 @@ export function createBridgeListener(handlers: BridgeHandlers) {
 	}
 
 	function stop(): void {
+		generation++;
 		if (!current) {
 			return;
 		}
