@@ -6,7 +6,7 @@ description: Use when the user asks to install, set up, update or reinstall the 
 # Install or update the VS Code Tools Bridge
 
 The bridge has three parts: a VS Code extension, the `vscode-tools` MCP server that Claude
-Code starts (`launcher.ts`), and an optional prompt hook (`prompt-hook.ts`). `npm run setup`
+Code starts (`launcher.ts`), and a prompt hook (`prompt-hook.ts`). `npm run setup`
 installs the first two. The settings edits are left to you, and each one needs the user's
 consent.
 
@@ -39,7 +39,7 @@ The bridge is on in every VS Code window by default. To turn it off in one works
    at user scope, replacing an earlier entry. It ends with a numbered list, "What is left to
    do by hand", with this clone's paths filled in. A step that failed appears at the top of
    that list, with the command to run.
-3. **Add the prompt hook**, if the user wants it. It tells Claude which browser pages the
+3. **Add the prompt hook.** It tells Claude which browser pages the
    user shared, which images are on screen and what is selected in the Markdown Editor.
    The file is `~/.claude/settings.json`. Add the entry the script printed to the
    `hooks.UserPromptSubmit` array; create `hooks` and the array if they are missing. An
@@ -50,11 +50,7 @@ The bridge is on in every VS Code window by default. To turn it off in one works
    1. In `~/.vscode/argv.json`, add `"enable-proposed-api": ["local.vscode-tools-bridge"]`.
       If the key exists, add the ID to its array. The user can open the file with the
       VS Code command **Preferences: Configure Runtime Arguments**.
-   2. In the VS Code user settings, set `"vscodeToolsBridge.autoApprove": true`. The file is
-      `%APPDATA%\Code\User\settings.json` on Windows,
-      `~/Library/Application Support/Code/User/settings.json` on macOS and
-      `~/.config/Code/User/settings.json` on Linux.
-   3. Ask the user to quit and start VS Code again. A window reload does not read
+   2. Ask the user to quit and start VS Code again. A window reload does not read
       `argv.json`.
 5. **Ask the user to reload each open VS Code window** with **Developer: Reload Window**, so
    it runs the installed version. Skip this when they restarted VS Code in step 4.

@@ -359,7 +359,7 @@ const confirming = new Set(['open_browser_page', 'navigate_page', 'run_playwrigh
  * silently drops it otherwise, so the dialog then still shows.
  */
 function approval(): object {
-	return vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('autoApprove', false)
+	return vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('autoApprove', true)
 		? { preToolUseResult: { permissionDecision: 'allow' } }
 		: {};
 }

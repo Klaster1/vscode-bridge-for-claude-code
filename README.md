@@ -20,72 +20,16 @@ this file for type errors", and Claude picks the tool.
 | `open_browser_page`, `read_page`, `screenshot_page`, `click_element` and other browser tools | Open, read and screenshot pages in VS Code's integrated browser, click, hover, drag and type there, and run Playwright code. Needs `workbench.browser.enableChatTools` on. |
 
 To show Claude a page you have open in the integrated browser, press **Share with Agent** in
-the page toolbar. With the prompt hook from the install steps, each prompt tells Claude which
-pages you share, so "this page" needs no more explanation.
+the page toolbar. Claude knows which pages you share, so "this page" needs no explanation.
 
-Limits:
+## Claude sees what you have open
 
-- VS Code asks you before Claude opens a page, navigates or runs Playwright code. Claude waits
-  until you answer the dialog in the VS Code window.
-- `get_diagnostics` opens each file it checks in a background preview tab, because TypeScript checks only open files.
-- `get_diagnostics` waits 3 seconds on a file with no problems.
-- Claude sees the Copilot and terminal tools only while the window has them.
+Claude can look at an image file (PNG, JPEG, GIF or WebP) you have open in VS Code, and knows
+which one, so "this screenshot" needs no path. Text you select in the Markdown Editor shows in
+Claude Code's selection chip, and Claude gets it with your prompt, as it does for a text
+editor. The selection needs Claude Code's VS Code extension.
 
-Settings:
-
-| Setting | Default | Effect |
-|---------|---------|--------|
-| `vscodeToolsBridge.executeCommand.allow` | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
-| `vscodeToolsBridge.executeCommand.deny` | `[]` | Command IDs it must never run. Deny wins over allow. |
-| `vscodeToolsBridge.autoApprove` | `false` | Skips the browser dialog. |
-
-To keep Claude from closing the window, for example:
-
-```jsonc
-"vscodeToolsBridge.executeCommand.deny": ["workbench.action.quit", "workbench.action.closeWindow"]
-```
-
-`autoApprove` works only after you run **Preferences: Configure Runtime Arguments**, add this
-line to `argv.json` and restart VS Code:
-
-```jsonc
-"enable-proposed-api": ["local.vscode-tools-bridge"]
-```
-
-## Claude sees the images you have open
-
-Open an image file (PNG, JPEG, GIF or WebP) in VS Code, and Claude can look at it. With the
-prompt hook from the install steps, each prompt tells Claude which images you have open, so
-"this screenshot" needs no path.
-
-Limits:
-
-- Claude sees only the image in the front tab of each editor group.
-
-## Claude sees your Markdown Editor selection
-
-Select text in VS Code's Markdown Editor. Claude Code's selection chip shows it, and Claude
-gets it with your prompt, as it does for a text editor. This needs Claude Code's VS Code
-extension.
-
-Limits:
-
-- A Markdown Editor that was open before the bridge started, or before you turned on
-  `vscodeToolsBridge.markdownEditor.selection`, shows no selection until you reopen it. VS
-  Code can restore such editors at startup.
-- With two Markdown Editors on the same file, the one opened last counts.
-- Claude gets the selection even in a file that `.gitignore` or VS Code's exclude settings
-  cover.
-- When this feature starts, an empty **VS Code Tools Bridge** tab opens and closes at once.
-- A Claude Code update can stop the chip from showing the selection. The **VS Code Tools
-  Bridge** output channel then says so, and the prompt hook from the install steps gives Claude
-  the selection.
-
-Settings:
-
-| Setting | Default | Effect |
-|---------|---------|--------|
-| `vscodeToolsBridge.markdownEditor.selection` | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload. |
+If you don't see your selection, reopen the file.
 
 ## Chat links open in the editor you chose
 
@@ -94,17 +38,24 @@ the Markdown Editor for `.md` when you set it in `workbench.editorAssociations`,
 from an extension. Without the bridge, Claude Code opens every link in the text editor
 ([anthropics/claude-code#81482](https://github.com/anthropics/claude-code/issues/81482)).
 
-Limits:
+A link to a line or a heading opens the file at the top.
 
-- A link to a line or a heading in such a file opens the file at the top.
-- A Claude Code update can break this. Links then open in the text editor, and the **VS Code
-  Tools Bridge** output channel says so.
-
-Settings:
+## Settings
 
 | Setting | Default | Effect |
 |---------|---------|--------|
+| `vscodeToolsBridge.enabled` | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
+| `vscodeToolsBridge.executeCommand.allow` | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
+| `vscodeToolsBridge.executeCommand.deny` | `[]` | Command IDs it must never run. Deny wins over allow. |
+| `vscodeToolsBridge.autoApprove` | `true` | Skips the browser confirmation dialog. |
+| `vscodeToolsBridge.markdownEditor.selection` | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload. |
 | `vscodeToolsBridge.claudeCode.chatLinks` | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
+
+To keep Claude from closing the window, for example:
+
+```jsonc
+"vscodeToolsBridge.executeCommand.deny": ["workbench.action.quit", "workbench.action.closeWindow"]
+```
 
 ## Install
 
@@ -141,8 +92,15 @@ By hand:
    ```
 
 3. Reload each open VS Code window with **Developer: Reload Window**.
-4. Optional: add the prompt hook to `~/.claude/settings.json`. With it, each prompt tells Claude
-   the browser pages you share, the images you have open and your Markdown Editor selection.
+4. Run **Preferences: Configure Runtime Arguments**, add this line to `argv.json` and restart
+   VS Code. It lets Claude use the browser without a confirmation dialog.
+
+   ```jsonc
+   "enable-proposed-api": ["local.vscode-tools-bridge"]
+   ```
+
+5. Add the prompt hook to `~/.claude/settings.json`. It lets Claude know the pages you share, the
+   images you have open and your Markdown Editor selection.
 
    ```json
    "hooks": {
@@ -158,8 +116,6 @@ logs each call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
 
 To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
 
-The bridge is on in every window with a local folder open. To turn it off in a workspace, set
-`"vscodeToolsBridge.enabled": false` in its settings. With two windows on the same first
-folder, Claude reaches the one opened last.
+The bridge is on in every window with a local folder open.
 
 MIT licence. See [LICENSE](LICENSE).

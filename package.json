@@ -42,7 +42,7 @@
         },
         "vscodeToolsBridge.autoApprove": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "scope": "window",
           "markdownDescription": "Run forwarded tools that ask for confirmation (open or navigate a browser page, run Playwright code) without the modal dialog. Works only while VS Code runs with this extension's proposed API enabled: add `\"enable-proposed-api\": [\"local.vscode-tools-bridge\"]` to `argv.json` (**Preferences: Configure Runtime Arguments**) and restart. Without that, the dialog still shows."
         },

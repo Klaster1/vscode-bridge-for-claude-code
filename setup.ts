@@ -51,11 +51,10 @@ const hookEntry = { hooks: [{ type: 'command', command: `node "${hook}"`, timeou
 const indent = (text: string): string => text.replace(/^/gm, '     ');
 manual.push(
 	'Reload each open VS Code window (Developer: Reload Window), so it runs the installed version.',
-	`Optional: add the prompt hook to ${join(homedir(), '.claude', 'settings.json')}. Add this entry to the "hooks.UserPromptSubmit" array, and create the array if it is missing. If an entry there already runs prompt-hook.ts, replace it:\n\n`
+	`Add the prompt hook to ${join(homedir(), '.claude', 'settings.json')}. Add this entry to the "hooks.UserPromptSubmit" array, and create the array if it is missing. If an entry there already runs prompt-hook.ts, replace it:\n\n`
 		+ indent(JSON.stringify(hookEntry, null, 2)),
-	'Optional: skip the browser confirmations. Run Preferences: Configure Runtime Arguments in VS Code, add this line to argv.json and restart VS Code:\n\n'
-		+ indent(`"enable-proposed-api": ["${extensionId}"]`)
-		+ '\n\n     Then set "vscodeToolsBridge.autoApprove": true.',
+	'Let Claude use the browser without confirmation dialogs. Run Preferences: Configure Runtime Arguments in VS Code, add this line to argv.json and restart VS Code:\n\n'
+		+ indent(`"enable-proposed-api": ["${extensionId}"]`),
 	'Start a new Claude Code session in the workspace\'s first folder. /mcp lists vscode-tools as connected, and the "VS Code Tools Bridge" output channel in VS Code logs each call.',
 );
 console.log(`\nWhat is left to do by hand:\n\n${manual.map((step, i) => `${i + 1}. ${step}`).join('\n\n')}\n`);
