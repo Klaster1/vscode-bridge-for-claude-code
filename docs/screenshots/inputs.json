@@ -1,7 +1,7 @@
 {
-	"hash": "cba5ba39ae5e2d19b3ede34b3b322fa7693e22a25941256beb92bff2141274b8",
+	"hash": "6cf9bb8500038279d3c3eede9d6262a9a6b07ba988038de7c86566b92bbf8e9b",
 	"files": {
-		"package.json": "7a08bbde38fe5e97cc47666d736c1d441fef0e3991726d6ead7cda338d5c7ef9",
+		"package.json": "b33a1b545ed9aea251b60d518d59835fac6517bc8217e3866b5d6ba7ab835aa9",
 		"scripts/generate-screenshots.ts": "edaf421df9ea567039bf5f2ddebc2e73d3c1176a998d134acb5e20b10f726bd9",
 		"scripts/screenshot-fixture/docs/forecast-api.md": "6ab5f1aa78e0497f6c1775eb58be2aa5fbfb3696ac63e57feb648b188eff0d42",
 		"scripts/screenshot-fixture/package.json": "57eb6bad716f2dbd4b20240a82c03702635e7e558a9e07193c2d48ba4951a2bc",
