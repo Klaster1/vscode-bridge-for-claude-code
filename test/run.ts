@@ -24,6 +24,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryFile, type DiscoveryRecord } from '../src/discovery.ts';
+import { commandLine } from '../src/shell.ts';
 import { shimPaths, writeShims } from '../src/shims.ts';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -88,7 +89,7 @@ const vsix = process.env['BRIDGE_TEST_VSIX'];
 if (vsix) {
 	// Keep the CLI script path but replace its default user-data and extensions folders with ours.
 	const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(exe).filter(a => !/^--(user-data|extensions)-dir=/.test(a));
-	const installed = spawnSync(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix], { env, encoding: 'utf8', shell: process.platform === 'win32' });
+	const installed = spawnSync(commandLine(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix]), { env, encoding: 'utf8', shell: true });
 	console.log(installed.stdout, installed.stderr);
 }
 const code = spawn(exe, [

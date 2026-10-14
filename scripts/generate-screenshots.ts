@@ -22,6 +22,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { _electron, type Frame, type Locator } from 'playwright';
 import { discoveryFile } from '../src/discovery.ts';
+import { commandLine } from '../src/shell.ts';
 import { hashInputs, recordFile, type InputRecord } from './screenshot-inputs.ts';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -202,7 +203,7 @@ if (packaged.status !== 0) {
 	throw new Error(`vsce package failed:\n${packaged.stdout}\n${packaged.stderr}`);
 }
 const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(exe).filter(a => !/^--(user-data|extensions)-dir=/.test(a));
-const installed = spawnSync(cli!, [...cliArgs, `--user-data-dir=${userData}`, `--extensions-dir=${extensions}`, '--install-extension', vsix], { env, encoding: 'utf8', shell: true });
+const installed = spawnSync(commandLine(cli!, [...cliArgs, `--user-data-dir=${userData}`, `--extensions-dir=${extensions}`, '--install-extension', vsix]), { env, encoding: 'utf8', shell: true });
 if (!/successfully installed/.test(installed.stdout)) {
 	throw new Error(`Installing the VSIX failed:\n${installed.stdout}\n${installed.stderr}`);
 }
