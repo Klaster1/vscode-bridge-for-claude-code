@@ -3,7 +3,7 @@
   "displayName": "VS Code Bridge for Claude Code",
   "description": "Gives Claude Code a VS Code window's tools, and shows it what you have open.",
   "publisher": "local",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -66,19 +66,12 @@
           "markdownDescription": "Command IDs the `execute_command` MCP tool must never run, with the same `*` wildcard. Deny wins over allow. Only your user settings set it; a workspace cannot."
         }
       }
-    },
-    "commands": [
-      {
-        "command": "vscodeToolsBridge.connectClaudeCode",
-        "title": "VS Code Bridge for Claude Code: Connect Claude Code"
-      }
-    ]
+    }
   },
   "scripts": {
-    "vscode:uninstall": "node ./uninstall.ts",
     "setup": "node setup.ts",
     "typecheck": "tsc -p .",
-    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/install-check.ts && node test/shell-check.ts && node test/shims-check.ts && node test/uninstall-check.ts && node test/manifest-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts",
+    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts",
     "package": "vsce package --allow-missing-repository --allow-star-activation --no-rewrite-relative-links",
     "screenshots": "node scripts/generate-screenshots.ts",
     "check-screenshots": "node scripts/check-screenshots.ts"

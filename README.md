@@ -19,6 +19,9 @@ this file for type errors", and Claude picks the tool.
 | `terminal_selection`, `terminal_last_command` | The text selected in the terminal, and the terminal's last command. Needs VS Code chat. |
 | `open_browser_page`, `read_page`, `screenshot_page`, `click_element` and other browser tools | Open, read and screenshot pages in VS Code's integrated browser, click, hover, drag and type there, and run Playwright code. Needs `workbench.browser.enableChatTools` on. |
 
+Claude also knows the steps for sharp page screenshots, page videos and VS Code commands, such as
+a diff or a comment box on a pull request line. Ask for the result.
+
 To show Claude a page you have open in the integrated browser, press **Share with Agent** in
 the page toolbar. Claude knows which pages you share, so "this page" needs no explanation.
 
@@ -76,8 +79,9 @@ To keep Claude from closing the window, for example:
 
 ## Install
 
-You need VS Code 1.138 or later, Node 22.18 or later, and the `claude` command on your PATH.
-The bridge is not on the Marketplace.
+The bridge has two parts: a VS Code extension, and a Claude Code plugin that connects Claude Code
+to it. You need VS Code 1.138 or later, Node 22.18 or later, and Claude Code. The bridge is not on
+the Marketplace.
 
 ### From a release
 
@@ -85,8 +89,14 @@ The bridge is not on the Marketplace.
 2. Install it: run `code --install-extension <file>`, or use **Install from VSIX...** in the
    Extensions view.
 3. Reload each open VS Code window with **Developer: Reload Window**.
-4. Run **VS Code Bridge for Claude Code: Connect Claude Code** from the Command Palette. It asks
-   first, then adds the `vscode-tools` MCP server and the prompt hook to Claude Code.
+4. Install the Claude Code plugin:
+
+   ```sh
+   claude plugin install vscode-bridge --marketplace Klaster1/vscode-bridge-for-claude-code
+   ```
+
+   In a Claude Code session, run `/plugin marketplace add Klaster1/vscode-bridge-for-claude-code`,
+   then `/plugin install vscode-bridge@vscode-bridge`.
 5. Run **Preferences: Configure Runtime Arguments**, add this line to `argv.json` and restart
    VS Code. It lets Claude use the browser without a confirmation dialog.
 
@@ -94,7 +104,13 @@ The bridge is not on the Marketplace.
    "enable-proposed-api": ["local.vscode-tools-bridge"]
    ```
 
-To update, install the new `.vsix` and reload the VS Code windows.
+To update, install the new `.vsix` and reload the VS Code windows. Then update the plugin and
+start a new Claude Code session:
+
+```sh
+claude plugin marketplace update vscode-bridge
+claude plugin update vscode-bridge@vscode-bridge
+```
 
 ### From a clone
 
@@ -108,44 +124,25 @@ Without the skill, run this in the clone:
 npm run setup
 ```
 
-The script builds the extension, installs it into VS Code and connects Claude Code to it, as
-**Connect Claude Code** does. It then prints the steps left to you, with the paths filled in.
+The script builds the extension, installs it into VS Code and installs the Claude Code plugin from
+the clone. It then prints the steps left to you. The plugin runs from the clone, so a change there
+takes effect in the next Claude Code session.
 
 To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
-
-### By hand
-
-When the extension starts, it writes `launcher.mjs` and `prompt-hook.mjs` to
-`%LOCALAPPDATA%\vscode-tools-bridge` on Windows, and to `~/.local/share/vscode-tools-bridge`
-elsewhere. Claude Code's configuration points at these two files. To do the Connect step
-yourself, replace `<folder>` below with that folder, with forward slashes.
-
-1. Add the MCP server to Claude Code:
-
-   ```sh
-   claude mcp add --scope user vscode-tools -- node <folder>/launcher.mjs
-   ```
-
-2. Add the prompt hook to `~/.claude/settings.json`:
-
-   ```json
-   "hooks": {
-     "UserPromptSubmit": [
-       { "hooks": [{ "type": "command", "command": "node \"<folder>/prompt-hook.mjs\"", "timeout": 5 }] }
-     ]
-   }
-   ```
 
 ### Check
 
 Start `claude` in the window's first workspace folder or a folder below it. `/mcp` lists
-`vscode-tools` as connected, and the **VS Code Bridge for Claude Code** output channel logs each
-call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
+`plugin:vscode-bridge:vscode-tools` as connected, and the **VS Code Bridge for Claude Code**
+output channel logs each call. After a window reload, run `/mcp` and reconnect the server.
 
 ![vscode-tools connected in /mcp](docs/screenshots/mcp-connected.png)
 
 ### Uninstall
 
-Uninstall the extension in the Extensions view, then restart VS Code. The restart removes what
-the extension added to Claude Code: the `vscode-tools` MCP server, the prompt hook, and the
-`launcher.mjs` and `prompt-hook.mjs` files. Entries that point at other files stay.
+Uninstall the extension in the Extensions view. Then remove the plugin:
+
+```sh
+claude plugin uninstall vscode-bridge@vscode-bridge
+claude plugin marketplace remove vscode-bridge
+```

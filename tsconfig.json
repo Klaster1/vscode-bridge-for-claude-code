@@ -16,6 +16,6 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "launcher.ts", "prompt-hook.ts", "setup.ts", "uninstall.ts", "scripts/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "plugin/**/*.ts", "setup.ts", "scripts/**/*.ts"],
   "exclude": ["test/fixture/**", "scripts/screenshot-fixture/**"]
 }

@@ -7,7 +7,7 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server as NetServer, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { discoveryDir, discoveryFile, ensureDiscoveryDir, folderHash, type DiscoveryRecord } from './discovery.ts';
+import { discoveryDir, discoveryFile, ensureDiscoveryDir, folderHash, type DiscoveryRecord } from '../plugin/scripts/discovery.ts';
 
 const HANDSHAKE_MS = 5_000; // A client has this long to send the token.
 

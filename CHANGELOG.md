@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0] - 2026-10-14
+
+### Added
+
+- A Claude Code plugin connects Claude Code to VS Code. Install it with one `claude plugin` command.
+- Claude knows the steps for sharp page screenshots, page videos, diffs and review comment boxes.
+
+### Changed
+
+- `npm run setup` installs the Claude Code plugin from the clone.
+
+### Removed
+
+- **Connect Claude Code** and its launcher files: the Claude Code plugin replaces them.
+- To clean up, run `claude mcp remove vscode-tools` and delete the `prompt-hook.mjs` hook entry.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added

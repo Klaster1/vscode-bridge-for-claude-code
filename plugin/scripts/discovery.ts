@@ -1,7 +1,8 @@
 // Shared by the extension, the stdio launcher and the prompt hook: where a VS Code window
 // advertises its bridge, and how a Claude Code session finds the window whose
 // first workspace folder is its working directory (or an ancestor of it).
-// Imports nothing from 'vscode', so the launcher and hook can load it in plain Node.
+// Imports nothing from 'vscode', so the launcher and hook can load it in plain Node. It lives in
+// the plugin because an installed plugin loads only its own files; the extension imports it from here.
 
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
