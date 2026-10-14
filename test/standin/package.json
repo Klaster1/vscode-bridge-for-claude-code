@@ -1,0 +1,20 @@
+{
+  "name": "claude-code-standin",
+  "publisher": "local",
+  "version": "0.0.0",
+  "private": true,
+  "engines": { "vscode": "^1.138.0" },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:standin.open",
+    "onCommand:standin.received",
+    "onCommand:standin.close"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "standin.open", "title": "Stand-in: open the chat webview" },
+      { "command": "standin.received", "title": "Stand-in: list the messages the page received" },
+      { "command": "standin.close", "title": "Stand-in: close the chat webview" }
+    ]
+  }
+}

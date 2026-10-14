@@ -15,7 +15,8 @@
     "vscode": "^1.138.0"
   },
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCustomEditor:vscode.markdown.editor"
   ],
   "contributes": {
     "configuration": {

@@ -13,8 +13,9 @@ It has three parts:
 - **`launcher.ts`** is the stdio MCP server that Claude Code starts. It finds the
   window for its working directory and passes bytes both ways.
 - **`prompt-hook.ts`** is an optional `UserPromptSubmit` hook. Before each
-  prompt, it tells Claude which integrated-browser pages you have shared with it
-  and which image files you have on screen.
+  prompt, it tells Claude which integrated-browser pages you have shared with it,
+  which image files you have on screen and which text you have selected in the
+  Markdown Editor.
 
 Nothing is built. VS Code's extension host and Node 22.18+ run the `.ts` files
 directly by stripping their types.
@@ -30,6 +31,7 @@ directly by stripping their types.
 | `open_files` | Opens files in the editor so you can see them. Add `:line` to a path to jump to that line; `background: true` keeps focus where it is. |
 | `list_workspaces` | The window's workspace name, workspace file and folders, plus the bridge's pipe and discovery file, for debugging. |
 | `visible_images` | Image files (PNG, JPEG, GIF, WebP) in the front tab of each editor group, with their paths. Claude reads a path with its Read tool to see the image. |
+| `markdown_editor_selection` | The text selected in the rich Markdown Editor, in the front tab of each editor group that shows one: the file path, the 1-based line range and the selected text (`maxChars` caps it, default 4000). With nothing selected, the cursor line. `selectedOnly: true` skips editors with no selected text, and `skipDelivered: true` skips those that Claude Code's selection chip already shows. See [Markdown Editor selection](#markdown-editor-selection). |
 | `shared_browser_pages` | Integrated-browser pages shared with the agent: the ones you shared with the page toolbar's **Share with Agent** button, and any Claude opened. Returns each page's ID, title, URL and, unless `snapshot` is false, its text snapshot. |
 
 Tools forwarded from VS Code and Copilot keep their own schemas and
@@ -55,14 +57,62 @@ it. To skip the dialog, turn on `vscodeToolsBridge.autoApprove` and start VS Cod
 with the extension's proposed API enabled (see [Setup](#setup), step 4). Without
 the proposed API, VS Code ignores the approval and the dialog still shows.
 
-### Shared pages and images in every prompt
+### Markdown Editor selection
+
+VS Code has no API for the selection in its rich Markdown Editor (the built-in
+`vscode.markdown.editor` custom editor), and Claude Code's own IDE context
+follows only the active text editor. So the extension patches the Markdown
+extension's webview at runtime. While `vscodeToolsBridge.enabled` is on, it
+wraps the `html` setter that all webviews in the extension host share. When the
+Markdown Editor sets its page, the wrapper inserts one script. The script sends
+the editor's selection offsets to the extension and reads nothing else from the
+page. The extension turns the offsets into a line range and text from the open
+document, so unsaved edits count.
+
+The extension also wraps `postMessage` on the same shared prototype. That shows
+it which webviews are Claude Code's chat webviews: the ones that receive its
+`from-extension` messages. When a Markdown Editor's selection changes, the
+extension posts a `selection_changed` message to them, in the format Claude Code
+uses for a text editor's selection. Claude Code then shows its own selection
+chip and adds the selection to your prompt as it does for a text editor. The
+eye button on the chip works as usual. A Markdown Editor that comes to the front
+sends its selection again. With `claudeCode.attachOpenFile` off, an empty
+selection clears the chip, as in a text editor.
+
+Notes:
+
+- The chip depends on Claude Code's internal message format, and it can break
+  when Claude Code updates. The extension then logs it once, and the prompt hook
+  note carries the selection instead.
+- The bridge finds a Claude Code webview when that webview next receives a
+  message from Claude Code, so a chat panel that is open at startup is found at
+  its first message.
+- Unlike Claude Code for a text editor, the extension does not check the file
+  against `.gitignore` and the exclude settings before it sends the text.
+
+- At startup, the extension opens a webview panel beside the active editor and
+  closes it at once, to reach the shared setter.
+- The patch is removed when the bridge stops or the setting turns off. A Markdown
+  Editor that was open at that time is read again only after you reopen it.
+- A Markdown Editor that VS Code restores at startup can open before the bridge
+  activates. It then has no script, and its selection is read after you reopen it.
+- If the Markdown extension's page changes so that the patch does not fit, the
+  extension logs it once in the **VS Code Tools Bridge** output channel and
+  reads no selection. The Markdown Editor itself keeps working.
+- Two editors that show the same file report the selection of the one that
+  opened last.
+
+### Shared pages, images and selections in every prompt
 
 With the prompt hook installed, a prompt sent while you have a page shared
 reaches Claude with a note listing the shared pages' IDs, titles and URLs. Claude
 then knows what "this page" means without being told to look. A prompt sent
 while an image file is in front in an editor group gets a note with the image's
 path, which Claude reads to see it. Claude Code's own IDE context follows only
-the active text editor, and an image opens in the image preview. The hook adds
+the active text editor, and an image opens in the image preview. A prompt sent
+while text is selected in a Markdown Editor that is in front in an editor group
+gets a note with the file, the line range and the selected text, unless Claude
+Code's selection chip already shows that selection. The hook adds
 nothing when there is nothing to report or the bridge is off. It gives up after 900 ms and
 never fails a prompt.
 

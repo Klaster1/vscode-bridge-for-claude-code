@@ -3,7 +3,7 @@
 // stdio launcher (../launcher.ts) and prompt hook (../prompt-hook.ts) find the
 // pipe from their working directory.
 // Does nothing until vscodeToolsBridge.enabled is on, or in a window with no
-// folder open.
+// folder open. That includes the Markdown Editor selection patch.
 
 import * as vscode from 'vscode';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -15,27 +15,52 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryDir, discoveryFile, folderHash, type DiscoveryRecord } from './discovery.ts';
+import { installMarkdownSelection } from './markdownSelection.ts';
 import { allTools } from './tools.ts';
 
 let log: vscode.LogOutputChannel;
+let markdownSelection: vscode.Disposable | undefined;
 let current: { server: NetServer; file: string; record: DiscoveryRecord } | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
 	log = vscode.window.createOutputChannel('VS Code Tools Bridge', { log: true });
-	context.subscriptions.push(log, { dispose: stop });
+	context.subscriptions.push(log, { dispose: stop }, { dispose: () => syncMarkdownSelection(false) });
 	const restart = () => {
 		stop();
 		start().catch(err => log.error(`Bridge failed to start: ${err instanceof Error ? err.message : String(err)}`));
 	};
+	// Install the patch before returning, so a Markdown Editor opened right after activation is covered.
+	syncMarkdownSelection(isEnabled());
 	restart();
 	// The pipe is keyed on the first folder, so re-key when the folders change.
 	context.subscriptions.push(
-		vscode.workspace.onDidChangeWorkspaceFolders(restart),
-		vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('vscodeToolsBridge.enabled') && restart()),
+		vscode.workspace.onDidChangeWorkspaceFolders(() => {
+			syncMarkdownSelection(isEnabled());
+			restart();
+		}),
+		vscode.workspace.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration('vscodeToolsBridge.enabled')) {
+				syncMarkdownSelection(isEnabled());
+				restart();
+			}
+		}),
 	);
 }
 
+const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', false)
+	&& vscode.workspace.workspaceFolders?.[0]?.uri.scheme === 'file';
+
+function syncMarkdownSelection(wanted: boolean): void {
+	if (wanted && !markdownSelection) {
+		markdownSelection = installMarkdownSelection(message => log.info(message));
+	} else if (!wanted && markdownSelection) {
+		markdownSelection.dispose();
+		markdownSelection = undefined;
+	}
+}
+
 export function deactivate(): void {
+	syncMarkdownSelection(false);
 	stop();
 }
 

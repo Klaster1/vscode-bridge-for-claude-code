@@ -1,11 +1,13 @@
 // Claude Code UserPromptSubmit hook: tells Claude what the user has in view in
 // the VS Code window of this session and Claude Code itself does not report:
-// integrated-browser pages shared with the agent, and image files open in an
-// editor group. It runs before each prompt is sent.
+// integrated-browser pages shared with the agent, image files open in an editor
+// group, and text selected in the Markdown Editor unless Claude Code's own
+// selection chip already shows it. It runs before each prompt is sent.
 //
 // Reads the hook payload from stdin (JSON with the session's `cwd`), finds that
 // window's bridge the same way launcher.ts does, asks it over MCP for
-// shared_browser_pages without snapshots and for visible_images, and prints
+// shared_browser_pages without snapshots, for visible_images and for
+// markdown_editor_selection, and prints
 // {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
 // "additionalContext": "..."}}, which Claude Code adds to the prompt. A hook
 // adds text only, so an image goes in as its path for Claude to read.
@@ -82,7 +84,8 @@ try {
 			{ jsonrpc: '2.0', method: 'notifications/initialized' },
 			{ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'shared_browser_pages', arguments: { snapshot: false } } },
 			{ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'visible_images', arguments: {} } },
-		], [2, 3]);
+			{ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'markdown_editor_selection', arguments: { selectedOnly: true, skipDelivered: true } } },
+		], [2, 3, 4]);
 		const sections: string[] = [];
 		const pages = textOf(results.get(2));
 		if (pages.includes('Page ID:')) {
@@ -102,6 +105,16 @@ try {
 				images,
 				'',
 				'To see an image, read its file with the Read tool.',
+			].join('\n'));
+		}
+		const selections = textOf(results.get(4));
+		if (selections.startsWith('- ')) {
+			sections.push([
+				'Text the user has selected in VS Code\'s Markdown Editor, one entry per editor group (this reflects the moment the prompt was sent):',
+				'',
+				selections,
+				'',
+				'To see the text around a selection, read the file with the Read tool. The file on disk lacks any unsaved edits.',
 			].join('\n'));
 		}
 		if (sections.length) {

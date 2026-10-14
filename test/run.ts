@@ -77,6 +77,7 @@ if (vsix) {
 const code = spawn(exe, [
 	workspace,
 	...(vsix ? [] : [`--extensionDevelopmentPath=${root}`]),
+	`--extensionDevelopmentPath=${join(root, 'test', 'standin')}`, // Plays Claude Code's chat webview.
 	`--user-data-dir=${join(run, 'user-data')}`,
 	`--extensions-dir=${join(run, 'extensions')}`,
 	'--disable-workspace-trust',
@@ -217,6 +218,86 @@ try {
 		const context = hookContext(h.stdout) ?? '';
 		results.push({ name: 'prompt hook reports the image', ok: h.status === 0 && /shot\.png \(active\)/.test(context) && /Read tool/.test(context), note: `${h.ms} ms` });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+	}
+	{
+		await expectText('markdown_editor_selection, no Markdown Editor in front', 'markdown_editor_selection', {}, /No Markdown Editor is in front/);
+		// The built-in Markdown Editor has no selection API; the bridge reads it from the page.
+		const notes = readFileSync(join(workspace, 'notes.md'), 'utf8');
+		await call('execute_command', { command: 'vscode.openWith', args: [{ $uri: 'notes.md' }, 'vscode.markdown.editor'] });
+		const selectionNow = async () => textOf(await call('markdown_editor_selection', {}));
+		const until = async (done: (t: string) => boolean, ms = 20_000): Promise<string> => {
+			let t = await selectionNow();
+			for (const end = Date.now() + ms; !done(t) && Date.now() < end; t = await selectionNow()) {
+				await new Promise(r => setTimeout(r, 500));
+			}
+			return t;
+		};
+		await call('execute_command', { command: 'markdown.editor.selectAll' });
+		const all = await until(t => t.includes('selected text:'));
+		console.log(`\n--- markdown_editor_selection after selectAll ---\n${all}`);
+		const lines = notes.split('\n').length - 1;
+		await check('markdown_editor_selection returns the selected text and lines', async () =>
+			all.includes(`notes.md (active), lines 1-${lines}, selected text:\n\`\`\`\n${notes}\n\`\`\``) || all.slice(0, 300));
+		const h = runHook(workspace);
+		const context = hookContext(h.stdout) ?? '';
+		results.push({ name: 'prompt hook reports the selection', ok: h.status === 0 && context.includes(`lines 1-${lines}, selected text:`) && context.includes('Second paragraph.') && /Markdown Editor/.test(context), note: `${h.ms} ms` });
+		await call('execute_command', { command: 'markdown.editor.cursorDocumentEnd' });
+		const cursor = await until(t => !t.includes('selected text:'));
+		console.log(`\n--- markdown_editor_selection after cursorDocumentEnd ---\n${cursor}`);
+		await check('markdown_editor_selection reports the cursor line when nothing is selected', async () =>
+			/notes\.md \(active\): nothing selected, cursor on line \d+\./.test(cursor) || cursor.slice(0, 300));
+		const quiet = runHook(workspace);
+		results.push({ name: 'prompt hook adds nothing for a cursor', ok: quiet.status === 0 && !(hookContext(quiet.stdout) ?? '').includes('Markdown Editor'), note: `${quiet.ms} ms` });
+		// Claude Code's selection chip. A stand-in extension (test/standin) plays its chat webview: it posts a
+		// from-extension message, which is how the bridge finds the webview, and records what it receives.
+		await call('execute_command', { command: 'standin.open' });
+		type Posted = { request?: { type?: string; selection?: { filePath: string; startLine: number; endLine: number; selectedText?: string } } };
+		const standinMessages = async (): Promise<Posted[]> =>
+			(JSON.parse(textOf(await call('execute_command', { command: 'standin.received' }))) as { message?: Posted }[]).flatMap(m => m.message ? [m.message] : []);
+		const selectionPosts = async (done: (n: number) => boolean) => {
+			let posts: Posted[] = [];
+			for (const end = Date.now() + 20_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+				posts = (await standinMessages()).filter(m => m.request?.type === 'selection_changed');
+				if (done(posts.length)) {
+					break;
+				}
+			}
+			return posts;
+		};
+		await check('stand-in webview is live', async () => {
+			for (const end = Date.now() + 20_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+				if ((await standinMessages()).some(m => m.request?.type === 'focus_input')) {
+					return true;
+				}
+			}
+			return 'the stand-in received no message';
+		});
+		await call('execute_command', { command: 'markdown.editor.selectAll' });
+		const chipPosts = await selectionPosts(n => n > 0);
+		const posted = chipPosts.at(-1)?.request?.selection; // As for a text editor, endLine is the line holding the selection's end, here the empty line after the last newline.
+		await check('Claude Code webview receives the selection', async () =>
+			posted?.selectedText === notes && posted.startLine === 1 && posted.endLine === lines + 1 && /notes\.md$/.test(posted.filePath) || JSON.stringify(chipPosts).slice(0, 300));
+		const delivered = await until(t => t.includes('selection chip'));
+		await check('markdown_editor_selection marks the delivered selection', async () => /lines 1-\d+, shown in Claude Code's selection chip, selected text:/.test(delivered) || delivered.slice(0, 300));
+		const skipped = runHook(workspace);
+		results.push({ name: 'prompt hook skips a selection the chip shows', ok: skipped.status === 0 && !(hookContext(skipped.stdout) ?? '').includes('Markdown Editor'), note: `${skipped.ms} ms` });
+		await call('execute_command', { command: 'markdown.editor.cursorDocumentEnd' });
+		const cursorPosts = await selectionPosts(n => n > chipPosts.length);
+		await check('a cursor reaches Claude Code as a line', async () => {
+			const c = cursorPosts.at(-1)?.request?.selection;
+			return cursorPosts.length > chipPosts.length && c?.startLine === lines + 1 && c.endLine === lines + 1 && c.selectedText === undefined || JSON.stringify(cursorPosts.at(-1)).slice(0, 300);
+		});
+		// Focus the stand-in's group and come back: Claude Code may have cleared its chip meanwhile.
+		await call('execute_command', { command: 'markdown.editor.selectAll' });
+		const beforeRefocus = (await selectionPosts(n => n > cursorPosts.length)).length;
+		await call('execute_command', { command: 'workbench.action.focusSecondEditorGroup' });
+		await call('execute_command', { command: 'workbench.action.focusFirstEditorGroup' });
+		const refocused = await selectionPosts(n => n > beforeRefocus);
+		await check('a Markdown Editor coming to the front sends its selection again', async () =>
+			refocused.length > beforeRefocus && refocused.at(-1)?.request?.selection?.selectedText === notes || `${beforeRefocus} -> ${refocused.length} posts`);
+		await call('execute_command', { command: 'standin.close' });
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		await expectText('markdown_editor_selection, editor closed', 'markdown_editor_selection', {}, /No Markdown Editor is in front/);
 	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.

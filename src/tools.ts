@@ -4,6 +4,7 @@
 
 import * as vscode from 'vscode';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import { markdownEditorSelections } from './markdownSelection.ts';
 import { safeStringify, toolResultToContent } from './render.ts';
 
 type Args = Record<string, unknown>;
@@ -499,8 +500,53 @@ const visibleImagesTool: BridgeTool = {
 	},
 };
 
+// --- markdown_editor_selection ---------------------------------------------
+
+/** A code fence longer than any backtick run in the text. */
+const fenceFor = (t: string): string => '`'.repeat(Math.max(3, ...[...t.matchAll(/`+/g)].map(m => m[0].length + 1)));
+
+const markdownEditorSelectionTool: BridgeTool = {
+	definition: {
+		name: 'markdown_editor_selection',
+		description: 'The text the user has selected in VS Code\'s rich Markdown Editor: the front tab of each editor group that shows one. Returns the file path, the 1-based line range and the selected text; with nothing selected, the cursor line. Claude Code\'s own IDE context does not report this editor.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				selectedOnly: { type: 'boolean', description: 'Report only editors with selected text. Default false.' },
+				skipDelivered: { type: 'boolean', description: 'Leave out editors whose selection Claude Code\'s selection chip already shows. Default false.' },
+				maxChars: { type: 'number', description: 'Cap on each selected text. Default 4000.' },
+			},
+		},
+	},
+	async call(args) {
+		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
+		const entries: string[] = [];
+		for (const { uri, active, selection, delivered } of await markdownEditorSelections()) {
+			if (delivered && args['skipDelivered'] === true) {
+				continue;
+			}
+			const name = `${uri.scheme === 'file' ? uri.fsPath : uri.toString()}${active ? ' (active)' : ''}`;
+			if (!selection) {
+				if (args['selectedOnly'] !== true) {
+					entries.push(`- ${name}: no selection reported. Reopen the editor if the bridge started after it opened.`);
+				}
+			} else if (!selection.text) {
+				if (args['selectedOnly'] !== true) {
+					entries.push(`- ${name}: nothing selected, cursor on line ${selection.startLine}.`);
+				}
+			} else {
+				const lines = selection.startLine === selection.endLine ? `line ${selection.startLine}` : `lines ${selection.startLine}-${selection.endLine}`;
+				const shown = selection.text.length > maxChars ? `${selection.text.slice(0, maxChars)}\n[selection truncated at ${maxChars} of ${selection.text.length} characters]` : selection.text;
+				const fence = fenceFor(shown);
+				entries.push(`- ${name}, ${lines}${delivered ? ', shown in Claude Code\'s selection chip' : ''}, selected text:\n${fence}\n${shown}\n${fence}`);
+			}
+		}
+		return text(entries.length ? entries.join('\n') : args['skipDelivered'] === true ? 'No Markdown Editor has selected text beyond what Claude Code\'s selection chip shows.' : args['selectedOnly'] === true ? 'No Markdown Editor has selected text.' : 'No Markdown Editor is in front in an editor group.');
+	},
+};
+
 export function allTools(info: () => object): BridgeTool[] {
 	const forwardedNow = forwardedTools();
 	const browser = forwardedNow.some(t => t.definition.name === 'list_browser_pages') ? [sharedBrowserPages] : [];
-	return [getDiagnostics, renameSymbol, executeCommand, listCommands, openFiles, listWorkspacesTool(info), visibleImagesTool, ...forwardedNow, ...browser];
+	return [getDiagnostics, renameSymbol, executeCommand, listCommands, openFiles, listWorkspacesTool(info), visibleImagesTool, markdownEditorSelectionTool, ...forwardedNow, ...browser];
 }
