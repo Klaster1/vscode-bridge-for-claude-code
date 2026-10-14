@@ -162,7 +162,7 @@ await new Promise<void>(r => api.listen(0, '127.0.0.1', r));
 
 // Serves the fixture's page to the integrated browser, and the social preview with the shots it shows.
 const pages = createServer((req, res) => {
-	const preview = /^\/(scripts\/social-preview\.html|docs\/screenshots\/[\w-]+\.png)$/.exec(req.url ?? '')?.[1];
+	const preview = /^\/(scripts\/social-preview\.html|icon\.png|docs\/screenshots\/[\w-]+\.png)$/.exec(req.url ?? '')?.[1];
 	res.writeHead(200, { 'content-type': preview?.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8' });
 	res.end(readFileSync(preview ? join(root, preview) : join(workspace, 'public', 'index.html')));
 });
@@ -410,8 +410,11 @@ try {
 		void new BrowserWindow({ width: 680, height: 360, useContentSize: true, frame: false, resizable: false }).loadURL(url);
 	}, `http://127.0.0.1:${pagePort}/scripts/social-preview.html`);
 	const preview = await previewOpened;
-	type PreviewDocument = { document: { querySelectorAll(selector: string): { length: number } } };
-	await preview.waitForFunction(() => (globalThis as unknown as PreviewDocument).document.querySelectorAll('[data-crop]:not([data-ready])').length === 0);
+	type PreviewDocument = { document: { querySelectorAll(selector: string): { length: number }; images: ArrayLike<{ complete: boolean }> } };
+	await preview.waitForFunction(() => {
+		const { document } = globalThis as unknown as PreviewDocument;
+		return document.querySelectorAll('[data-crop]:not([data-ready])').length === 0 && Array.from(document.images).every(image => image.complete);
+	});
 	await preview.screenshot({ path: join(root, 'docs', 'social.png'), clip: { x: 0, y: 0, width: 640, height: 320 } });
 	shots.push('../social.png');
 	console.log('Saved social.png');

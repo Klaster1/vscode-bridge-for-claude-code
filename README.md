@@ -1,3 +1,5 @@
+<img src="icon.png" alt="" width="96" align="right">
+
 # VS Code Bridge for Claude Code
 
 A VS Code extension that gives Claude Code (the CLI) the tools and the screen of the VS Code window it works in.

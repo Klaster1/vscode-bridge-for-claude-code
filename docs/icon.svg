@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="VS Code Bridge for Claude Code">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2140"/>
+      <stop offset="1" stop-color="#0b0e1c"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8805f" stop-opacity="0.32"/>
+      <stop offset="0.6" stop-color="#e8805f" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#glow)"/>
+  <!-- VS Code side: a code bracket in VS Code blue -->
+  <path d="M88 82 L42 128 L88 174" fill="none" stroke="#3b9cf5" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Claude Code side: a code bracket in Claude coral -->
+  <path d="M168 82 L214 128 L168 174" fill="none" stroke="#e8805f" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- The bridge: one arrow each way -->
+  <g fill="none" stroke="#f4efe9" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M108 112 H148 M138 100 L150 112 L138 124"/>
+    <path d="M148 144 H108 M118 132 L106 144 L118 156"/>
+  </g>
+</svg>

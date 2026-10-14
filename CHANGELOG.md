@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.1] - 2026-10-14
+
+### Added
+
+- The extension has an icon in the Extensions view.
+
 ## [0.5.0] - 2026-10-14
 
 ### Changed
