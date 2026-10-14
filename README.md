@@ -110,8 +110,8 @@ Without the skill, run this in the clone:
 npm run setup
 ```
 
-The script builds the extension, installs it into VS Code and adds `vscode-tools` to Claude
-Code. It then prints the steps left to you, with the paths filled in.
+The script builds the extension, installs it into VS Code and connects Claude Code to it, as
+**Connect Claude Code** does. It then prints the steps left to you, with the paths filled in.
 
 To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
 

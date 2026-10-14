@@ -8,17 +8,18 @@ description: Use when the user asks to install, set up, update or reinstall the 
 The bridge has three parts: a VS Code extension, the `vscode-tools` MCP server that Claude
 Code starts (`launcher.ts`), and a prompt hook (`prompt-hook.ts`). Claude Code's config points
 at two shims, `launcher.mjs` and `prompt-hook.mjs`, in a fixed folder that the extension and
-the setup script write; each imports the matching `.ts` file. `npm run setup` installs the
-first two parts. The settings edits are left to you, and each one needs the user's
-consent.
+the setup script write; each imports the matching `.ts` file. `npm run setup` installs all
+three parts: it installs the extension, registers `vscode-tools` and adds the prompt hook to
+Claude Code's `settings.json`. The one edit left to you is `argv.json`, and it needs the
+user's consent.
 
 The bridge is on in every VS Code window by default. To turn it off in one workspace, set
 `"vscodeToolsBridge.enabled": false` in that workspace's settings.
 
 ## Rules
 
-- **Ask before each file you change.** Name the file, show the exact change, and edit only
-  after the user agrees. A "no" skips that step; go on with the next one.
+- **Ask before each file you change by hand.** Name the file, show the exact change, and edit
+  only after the user agrees. A "no" skips that step; go on with the next one.
 - **Keep the rest of the file.** Merge your change into what is there. `argv.json` and
   VS Code's `settings.json` allow comments, so edit them as text and keep the comments.
 - **Never reload or restart VS Code yourself.** A reload restarts the extensions in that
@@ -37,26 +38,24 @@ The bridge is on in every VS Code window by default. To turn it off in one works
    ```
 
    It runs `npm ci` and `npm run package`, installs the VSIX with
-   `code --install-extension <vsix> --force`, and registers `vscode-tools` with Claude Code
-   at user scope, replacing an earlier entry. It ends with a numbered list, "What is left to
-   do by hand", with this clone's paths filled in. A step that failed appears at the top of
-   that list, with the command to run.
-3. **Add the prompt hook.** It tells Claude which browser pages the
-   user shared, which images are on screen and what is selected in the Markdown Editor.
-   The file is `~/.claude/settings.json`. Add the entry the script printed to the
-   `hooks.UserPromptSubmit` array; create `hooks` and the array if they are missing. An
-   entry that already runs a `prompt-hook` file from another path is the old install: replace
-   it. Parse the file afterwards to check it is valid JSON.
-4. **Skip the browser confirmations**, if the user wants it. Without this, VS Code shows a
+   `code --install-extension <vsix> --force`, registers `vscode-tools` with Claude Code at
+   user scope and adds the prompt hook to `settings.json` in `CLAUDE_CONFIG_DIR` or
+   `~/.claude`. The hook tells Claude which browser pages the user shared, which images are
+   on screen and what is selected in the Markdown Editor. The script replaces an earlier
+   registration and an earlier `prompt-hook` entry, and keeps a working registration when
+   the new one fails. It edits those two Claude Code files, so tell the user before you run
+   it. It ends with a numbered list, "What is left to do by hand", with this clone's paths
+   filled in. A step that failed appears at the top of that list, with the command to run.
+3. **Skip the browser confirmations**, if the user wants it. Without this, VS Code shows a
    dialog before `open_browser_page`, `navigate_page` and `run_playwright_code` run.
    1. In `~/.vscode/argv.json`, add `"enable-proposed-api": ["local.vscode-tools-bridge"]`.
       If the key exists, add the ID to its array. The user can open the file with the
       VS Code command **Preferences: Configure Runtime Arguments**.
    2. Ask the user to quit and start VS Code again. A window reload does not read
       `argv.json`.
-5. **Ask the user to reload each open VS Code window** with **Developer: Reload Window**, so
-   it runs the installed version. Skip this when they restarted VS Code in step 4.
-6. **Check the result**, as the "Check" section says.
+4. **Ask the user to reload each open VS Code window** with **Developer: Reload Window**, so
+   it runs the installed version. Skip this when they restarted VS Code in step 3.
+5. **Check the result**, as the "Check" section says.
 
 ## Update after a `git pull`
 
