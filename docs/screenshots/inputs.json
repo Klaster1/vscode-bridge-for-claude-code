@@ -1,0 +1,35 @@
+{
+	"hash": "76bd5f175fe8ec4b743088e0fef19f910fe030a8a20ed6c51463221e81e3a3ac",
+	"files": {
+		"launcher.ts": "06ccbf2d1e5c75f0b35412a702c46bc70b9549c670b91cbedffbd580643413b8",
+		"package.json": "3712aa1b92c0e4190c66a59ca6a6334d7be56793e47543b184cc5b1046d34f86",
+		"scripts/generate-screenshots.ts": "41a48401b8b3933b5d4fdb87487a2ba9a7d4092a24ab7c5a4283af498c4a2c5e",
+		"scripts/screenshot-fixture/docs/forecast-api.md": "6ab5f1aa78e0497f6c1775eb58be2aa5fbfb3696ac63e57feb648b188eff0d42",
+		"scripts/screenshot-fixture/package.json": "57eb6bad716f2dbd4b20240a82c03702635e7e558a9e07193c2d48ba4951a2bc",
+		"scripts/screenshot-fixture/public/index.html": "884e8759adce3acfcc22a65d5c4bf5f3292e448af95d998d91b79832c60f1dac",
+		"scripts/screenshot-fixture/src/forecast.ts": "ba380663af20ea010fa398b08786ad4a883508de2b831d903d891879778a1b04",
+		"scripts/screenshot-inputs.ts": "26870c18413f9807645a8ca164b12327ceaa8442a5fcc5873b20d291e451ae2e",
+		"scripts/social-preview.html": "4fe05cbbed019b415ce7d16b8b809851b95fc0b8c5956a325b361f7d0e6020aa",
+		"src/chatLinks.ts": "1d91e5a451bc318729e615102cbc6be395ee3c295ca4beb3a291848d02fb9f77",
+		"src/claudeApi.ts": "8754c857e3136a17317a5386202d81148e3995e3cd1cee71bfe9d8202798e049",
+		"src/connect.ts": "e09aaa0839b9ab81ba65b210a41ade3184ad2a6a42babd01c4a196b5a89ac146",
+		"src/discovery.ts": "bc8e720e241fbc88b0aa323a55a8c9c610a974878163713ce21e13040f1e62bf",
+		"src/extension.ts": "c85cf8b5638927c092a76463f8967f2cc5f8f168f95a1cc1a551ee249e2045fb",
+		"src/glob.ts": "df7049e18d1483cbfe6637c6dbe2f635094c30d153ba10b404ac04debf0f9113",
+		"src/markdownSelection.ts": "349735b7bd623238ad26bad38bf6707c16cad1089647d38866285aa059d4ddbd",
+		"src/render.ts": "09b2c915edbb1bf421402c45420c2d38011a2d9e696e04fb8b630f391e24a1ed",
+		"src/shims.ts": "7b445be904312db6815b5d16eb395a2fdc261215c45d2833d4aa27b1d98f3ff9",
+		"src/tools.ts": "c6f59595fd9505639fb38ccf4359859701544e926f333bb9dd90317cd763baa0"
+	},
+	"images": [
+		"docs/screenshots/browser-shared-page.png",
+		"docs/screenshots/chat-link.png",
+		"docs/screenshots/cli-selection.png",
+		"docs/screenshots/markdown-selection-chip.png",
+		"docs/screenshots/mcp-connected.png",
+		"docs/screenshots/settings.png",
+		"docs/social.png"
+	],
+	"vscode": "1.138.0",
+	"claudeCode": "2.1.299"
+}

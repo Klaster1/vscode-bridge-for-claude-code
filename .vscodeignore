@@ -6,3 +6,7 @@ tsconfig.json
 setup.ts
 .vscode/**
 *.code-workspace
+scripts/**
+docs/social.png
+docs/screenshots/inputs.json
+CLAUDE.md

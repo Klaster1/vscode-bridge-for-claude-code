@@ -88,6 +88,14 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
 - The "toolbar Share with Agent button found" check runs on Windows only, and it is known to
   flake. Run the test again before you look for a cause.
 
+## Screenshots
+
+The README images and `docs/social.png` come from `npm run screenshots`. It runs only locally:
+it drives a real VS Code with the real Claude Code extension and makes no model calls. A change
+to `src/`, `package.json`, `launcher.ts` or anything under `scripts/` that shapes the images
+gets a fresh run, and the new images and `docs/screenshots/inputs.json` go into the same commit.
+`npm run check-screenshots` fails when the recorded input hash no longer matches, and CI runs it.
+
 ## Versioning
 
 The version in `package.json` follows semver. The first release is 0.0.1. You decide when a

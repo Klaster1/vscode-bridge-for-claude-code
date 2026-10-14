@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VS Code Bridge for Claude Code</title>
+<style>
+	* { box-sizing: border-box; margin: 0; }
+	html, body { width: 640px; height: 320px; overflow: hidden; }
+	body {
+		position: relative;
+		font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+		color: #f4f1ec;
+		background:
+			radial-gradient(420px 260px at 8% 105%, rgb(217 119 87 / 0.42), transparent 70%),
+			radial-gradient(380px 300px at 92% -10%, rgb(56 132 255 / 0.40), transparent 70%),
+			linear-gradient(135deg, #10131f 0%, #161a2c 55%, #11141f 100%);
+	}
+	body::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background-image:
+			linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+			linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+		background-size: 20px 20px;
+		mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+	}
+	.text { position: absolute; left: 34px; top: 50%; transform: translateY(-50%); width: 272px; }
+	.eyebrow {
+		display: inline-flex; align-items: center; gap: 6px;
+		font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+		color: #f0a383;
+		padding: 3px 9px; border-radius: 999px;
+		background: rgb(217 119 87 / 0.14); border: 1px solid rgb(217 119 87 / 0.35);
+	}
+	.eyebrow .arrows { color: #8fb6ff; }
+	h1 { margin-top: 12px; font-size: 33px; line-height: 1.04; font-weight: 700; letter-spacing: -0.02em; }
+	h1 .accent { background: linear-gradient(90deg, #f2a07f, #e07a56); -webkit-background-clip: text; background-clip: text; color: transparent; }
+	p { margin-top: 12px; font-size: 13.5px; line-height: 1.4; color: #c9cbd6; }
+	.features { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 5px; }
+	.features span {
+		font-size: 9px; font-weight: 600; color: #dfe3f0;
+		padding: 3px 8px; border-radius: 6px;
+		background: rgb(255 255 255 / 0.07); border: 1px solid rgb(255 255 255 / 0.12);
+	}
+
+	.stage { position: absolute; inset: 0; perspective: 1200px; }
+	.deck { position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateY(-9deg) rotateX(4deg); transform-origin: 75% 50%; }
+	/* A card shows the part of a screenshot named by data-crop (x y width height, in image pixels), scaled to its width. */
+	.card {
+		position: absolute;
+		border-radius: 8px;
+		background-repeat: no-repeat;
+		border: 1px solid rgb(255 255 255 / 0.22);
+		box-shadow: 0 22px 44px rgb(0 0 0 / 0.55), 0 5px 12px rgb(0 0 0 / 0.35);
+	}
+	.browser { left: 372px; top: 22px; transform: translateZ(-60px); }
+	.markdown { left: 318px; top: 136px; transform: translateZ(-10px); }
+	.chip { left: 338px; top: 238px; transform: translateZ(30px); }
+	.ring {
+		position: absolute;
+		border-radius: 5px; border: 1.5px solid #ec8a63;
+		box-shadow: 0 0 0 3px rgb(236 138 99 / 0.22), 0 0 16px rgb(236 138 99 / 0.75);
+	}
+	.link { position: absolute; inset: 0; overflow: visible; }
+</style>
+</head>
+<body>
+	<div class="text">
+		<div class="eyebrow">VS Code <span class="arrows">⇄</span> Claude Code</div>
+		<h1>VS Code Bridge<br>for <span class="accent">Claude Code</span></h1>
+		<p>Claude Code gets your VS Code window: its tools, your browser, your selection.</p>
+		<div class="features"><span>VS Code tools over MCP</span><span>Shared browser pages</span><span>Markdown Editor selection</span></div>
+	</div>
+	<div class="stage">
+		<div class="deck">
+			<div class="card browser" data-src="browser-shared-page.png" data-crop="930 0 974 560" data-width="240" data-ring="1440 88 252 46"></div>
+			<div class="card markdown" data-src="markdown-selection-chip.png" data-crop="40 610 960 280" data-width="250"></div>
+			<svg class="link" viewBox="0 0 640 320"><path d="M 470 224 C 500 228, 506 236, 494 247" fill="none" stroke="#ec8a63" stroke-width="1.6" stroke-dasharray="3 3" stroke-linecap="round"/></svg>
+			<div class="card chip" data-src="markdown-selection-chip.png" data-crop="1187 1140 1083 152" data-width="272" data-ring="1572 1232 232 46"></div>
+		</div>
+	</div>
+	<script>
+		for (const card of document.querySelectorAll('[data-crop]')) {
+			const [x, y, w, h] = card.dataset.crop.split(' ').map(Number);
+			const scale = Number(card.dataset.width) / w;
+			const image = new Image();
+			image.src = '../docs/screenshots/' + card.dataset.src;
+			image.decode().then(() => {
+				Object.assign(card.style, {
+					width: w * scale + 'px',
+					height: h * scale + 'px',
+					backgroundImage: 'url("' + image.src + '")',
+					backgroundSize: image.naturalWidth * scale + 'px auto',
+					backgroundPosition: -x * scale + 'px ' + -y * scale + 'px',
+				});
+				if (card.dataset.ring) {
+					const [rx, ry, rw, rh] = card.dataset.ring.split(' ').map(Number);
+					const ring = card.appendChild(document.createElement('div'));
+					ring.className = 'ring';
+					Object.assign(ring.style, { left: (rx - x) * scale + 'px', top: (ry - y) * scale + 'px', width: rw * scale + 'px', height: rh * scale + 'px' });
+				}
+				card.dataset.ready = '';
+			});
+		}
+	</script>
+</body>
+</html>

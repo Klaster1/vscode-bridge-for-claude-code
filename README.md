@@ -22,12 +22,16 @@ this file for type errors", and Claude picks the tool.
 To show Claude a page you have open in the integrated browser, press **Share with Agent** in
 the page toolbar. Claude knows which pages you share, so "this page" needs no explanation.
 
+![A page in the integrated browser, shared with Claude](docs/screenshots/browser-shared-page.png)
+
 ## Claude sees what you have open
 
 Claude can look at an image file (PNG, JPEG, GIF or WebP) you have open in VS Code, and knows
 which one, so "this screenshot" needs no path. Text you select in the Markdown Editor shows in
 Claude Code's selection chip, and Claude gets it with your prompt, as it does for a text
 editor. The selection needs Claude Code's VS Code extension, also when you use the CLI.
+
+![A Markdown Editor selection in Claude Code's selection chip](docs/screenshots/markdown-selection-chip.png)
 
 If you don't see your selection, reopen the file.
 
@@ -38,6 +42,8 @@ the Markdown Editor for `.md` when you set it in `workbench.editorAssociations`,
 from an extension. Without the bridge, Claude Code opens every link in the text editor
 ([anthropics/claude-code#81482](https://github.com/anthropics/claude-code/issues/81482)).
 
+![A chat link opened in the Markdown Editor](docs/screenshots/chat-link.png)
+
 A link to a line or a heading opens the file at the top.
 
 ## The Claude Code CLI
@@ -47,7 +53,11 @@ the tools and sees the images you have open. The CLI shows your Markdown Editor 
 does for a text editor. Chat links do not apply, since they belong to the extension's chat
 panel. `/ide` needs Claude Code's VS Code extension installed.
 
+![A Markdown Editor selection shown in the Claude Code CLI](docs/screenshots/cli-selection.png)
+
 ## Settings
+
+![The extension's settings in the Settings editor](docs/screenshots/settings.png)
 
 | Setting | Default | Effect |
 |---------|---------|--------|
@@ -134,3 +144,5 @@ forward slashes.
 Start `claude` in the window's first workspace folder or a folder below it. `/mcp` lists
 `vscode-tools` as connected, and the **VS Code Bridge for Claude Code** output channel logs each
 call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
+
+![vscode-tools connected in /mcp](docs/screenshots/mcp-connected.png)
