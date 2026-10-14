@@ -82,7 +82,7 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
   `test/harness.ts`, and start no VS Code.
 - The end-to-end test runs on Windows only, as CI does, because `test/window-helper.ps1` drives
   the VS Code windows through Win32 and UI Automation. On another platform it stops at once with
-  a message. It downloads VS Code 1.138.0 into `.vscode-test/`. It starts it with its own user
+  a message. It downloads VS Code 1.140.0 into `.vscode-test/`. It starts it with its own user
   data, extensions, discovery folder and Claude Code config, and calls the tools through the
   plugin's launcher and prompt hook, with the command lines from the plugin's manifests. The user's
   own VS Code and Claude Code config stay untouched.

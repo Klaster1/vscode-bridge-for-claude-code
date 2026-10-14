@@ -1,5 +1,5 @@
 // End-to-end check in an isolated VS Code, on Windows only: it needs test/window-helper.ps1,
-// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.138.0 into
+// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.140.0 into
 // .vscode-test/, starts it with its own user-data and extensions folders and
 // this extension loaded from source, then talks to the bridge through the Claude Code
 // plugin's launcher and prompt hook, with the command lines its manifests give Claude Code
@@ -78,7 +78,7 @@ const page = createServer((_req, res) => {
 await new Promise<void>(r => page.listen(0, '127.0.0.1', r));
 const pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}/`;
 
-const exe = await downloadAndUnzipVSCode({ version: '1.138.0', cachePath: join(root, '.vscode-test') });
+const exe = await downloadAndUnzipVSCode({ version: '1.140.0', cachePath: join(root, '.vscode-test') });
 // Drop variables inherited from a VS Code or Claude Code parent so the test
 // instance cannot mistake itself for a CLI call into the user's running VS Code.
 const env: NodeJS.ProcessEnv = {};

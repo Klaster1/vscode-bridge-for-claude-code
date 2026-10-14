@@ -3,7 +3,7 @@
   "displayName": "VS Code Bridge for Claude Code",
   "description": "Gives Claude Code a VS Code window's tools, and shows it what you have open.",
   "publisher": "klaster1",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -12,7 +12,7 @@
     "chatParticipantPrivate"
   ],
   "engines": {
-    "vscode": "^1.138.0"
+    "vscode": "^1.140.0"
   },
   "activationEvents": [
     "*"
@@ -77,15 +77,15 @@
     "check-screenshots": "node scripts/check-screenshots.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@vscode/prompt-tsx": "^0.4.0-alpha.9"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",
-    "@types/vscode": "^1.138.0",
+    "@types/vscode": "^1.140.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
-    "playwright": "^1.64.0",
+    "playwright": "^1.64.1",
     "typescript": "^7.0.2"
   }
 }
