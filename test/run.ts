@@ -473,8 +473,10 @@ try {
 		const shims = shimPaths();
 		const dir = dirname(shims.launcher);
 		const shimText = (file: string) => readFileSync(join(dir, file), 'utf8');
+		// The shims load the copy that runs: the clone, or the installed VSIX in the isolated extensions folder.
+		const extensionRoot = vsix ? join(run, 'extensions', readdirSync(join(run, 'extensions')).find(name => /^local\.vscode-tools-bridge-\d/.test(name)) ?? 'not-installed') : root;
 		// VS Code may write the drive letter in lower case.
-		const loads = (file: string, target: string) => shimText(file).toLowerCase().includes(pathToFileURL(join(root, target)).href.toLowerCase());
+		const loads = (file: string, target: string) => shimText(file).toLowerCase().includes(pathToFileURL(join(extensionRoot, target)).href.toLowerCase());
 		results.push({ name: 'the extension wrote the launcher and hook shims', ok: loads('launcher.mjs', 'launcher.ts') && loads('prompt-hook.mjs', 'prompt-hook.ts'), note: dir });
 		// What setup.ts writes for a clone, in a throwaway folder: complete, then left alone, then repaired.
 		const clone = join(run, 'clone-shims');
