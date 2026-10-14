@@ -1,0 +1,85 @@
+---
+name: install-vscode-tools-bridge
+description: Use when the user asks to install, set up, update or reinstall the VS Code Tools Bridge from this clone, after a `git pull`, or to check that the bridge works ("is vscode-tools connected", "the bridge tools are missing"). Runs the setup script, makes the settings edits it only prints, each with the user's consent, and checks the result.
+---
+
+# Install or update the VS Code Tools Bridge
+
+The bridge has three parts: a VS Code extension, the `vscode-tools` MCP server that Claude
+Code starts (`launcher.ts`), and an optional prompt hook (`prompt-hook.ts`). `npm run setup`
+installs the first two. The settings edits are left to you, and each one needs the user's
+consent.
+
+The bridge is on in every VS Code window by default. To turn it off in one workspace, set
+`"vscodeToolsBridge.enabled": false` in that workspace's settings.
+
+## Rules
+
+- **Ask before each file you change.** Name the file, show the exact change, and edit only
+  after the user agrees. A "no" skips that step; go on with the next one.
+- **Keep the rest of the file.** Merge your change into what is there. `argv.json` and
+  VS Code's `settings.json` allow comments, so edit them as text and keep the comments.
+- **Never reload or restart VS Code yourself.** A reload restarts the extensions in that
+  window, Claude Code's chat included. Ask the user to do it.
+
+## Install
+
+1. **Check the tools.** Run `node --version` (22.18 or later), `code --version` (1.138 or
+   later) and `claude --version`. If `code` is missing, the user can add it to the PATH
+   with the VS Code command **Shell Command: Install 'code' command in PATH** (macOS), or
+   install the VSIX by hand as step 2 says.
+2. **Run the script** in the clone's root folder:
+
+   ```sh
+   npm run setup
+   ```
+
+   It runs `npm ci` and `npm run package`, installs the VSIX with
+   `code --install-extension <vsix> --force`, and registers `vscode-tools` with Claude Code
+   at user scope, replacing an earlier entry. It ends with a numbered list, "What is left to
+   do by hand", with this clone's paths filled in. A step that failed appears at the top of
+   that list, with the command to run.
+3. **Add the prompt hook**, if the user wants it. It tells Claude which browser pages the
+   user shared, which images are on screen and what is selected in the Markdown Editor.
+   The file is `~/.claude/settings.json`. Add the entry the script printed to the
+   `hooks.UserPromptSubmit` array; create `hooks` and the array if they are missing. An
+   entry that already runs `prompt-hook.ts` from another path is the old install: replace
+   it. Parse the file afterwards to check it is valid JSON.
+4. **Skip the browser confirmations**, if the user wants it. Without this, VS Code shows a
+   dialog before `open_browser_page`, `navigate_page` and `run_playwright_code` run.
+   1. In `~/.vscode/argv.json`, add `"enable-proposed-api": ["local.vscode-tools-bridge"]`.
+      If the key exists, add the ID to its array. The user can open the file with the
+      VS Code command **Preferences: Configure Runtime Arguments**.
+   2. In the VS Code user settings, set `"vscodeToolsBridge.autoApprove": true`. The file is
+      `%APPDATA%\Code\User\settings.json` on Windows,
+      `~/Library/Application Support/Code/User/settings.json` on macOS and
+      `~/.config/Code/User/settings.json` on Linux.
+   3. Ask the user to quit and start VS Code again. A window reload does not read
+      `argv.json`.
+5. **Ask the user to reload each open VS Code window** with **Developer: Reload Window**, so
+   it runs the installed version. Skip this when they restarted VS Code in step 4.
+6. **Check the result**, as the "Check" section says.
+
+## Update after a `git pull`
+
+Run `npm run setup` again, then ask the user to reload each VS Code window. The hook and
+`argv.json` entries stay valid while the clone stays in the same folder. When the clone
+moved, replace the hook entry with the one the script prints.
+
+## Check
+
+1. Ask the user to start a new Claude Code session in the window's first workspace folder,
+   or a folder below it. `/mcp` lists `vscode-tools` as connected.
+2. Call the `list_workspaces` tool. Its `bridge.loadedFrom` path is in VS Code's extensions
+   folder, under `local.vscode-tools-bridge-<version>`, with the version from
+   `package.json`. Any other path means VS Code runs another copy of the extension.
+3. Ask the user to open the **VS Code Tools Bridge** output channel (**View: Toggle Output**,
+   then pick the channel). It shows `Listening on <pipe> for <folder>`, and one line per
+   tool call. The same log is on disk, in the newest session folder under VS Code's
+   `logs` folder: `window<N>/exthost/local.vscode-tools-bridge/VS Code Tools Bridge.log`.
+4. To check the hook, run `echo '{"cwd":"<the workspace folder>"}' | node prompt-hook.ts`.
+   It exits with 0. It prints JSON only while a page is shared, an image is in front in an
+   editor group or text is selected in a Markdown Editor; otherwise it prints nothing.
+
+The "Troubleshooting" section of [README.md](../../../README.md) lists the common errors and
+their causes.

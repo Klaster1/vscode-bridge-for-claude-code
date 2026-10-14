@@ -5,7 +5,7 @@
   "publisher": "local",
   "version": "0.0.1",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "main": "./src/extension.ts",
   "enabledApiProposals": [
@@ -24,9 +24,9 @@
       "properties": {
         "vscodeToolsBridge.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "scope": "window",
-          "markdownDescription": "Serve this window's tools to Claude Code. Off by default; turn it on in the workspace settings of each workspace that needs it."
+          "markdownDescription": "Serve this window's tools to Claude Code. Turn it off in the settings of a workspace that should not serve them."
         },
         "vscodeToolsBridge.autoApprove": {
           "type": "boolean",
@@ -56,6 +56,7 @@
     }
   },
   "scripts": {
+    "setup": "node setup.ts",
     "typecheck": "tsc -p .",
     "test": "node test/render-check.ts && node test/glob-check.ts && node test/run.ts",
     "package": "vsce package --allow-missing-repository --skip-license"

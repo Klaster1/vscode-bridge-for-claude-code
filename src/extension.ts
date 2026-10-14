@@ -2,7 +2,7 @@
 // private named pipe, and writes a discovery file that lets Claude Code's
 // stdio launcher (../launcher.ts) and prompt hook (../prompt-hook.ts) find the
 // pipe from their working directory.
-// Does nothing until vscodeToolsBridge.enabled is on, or in a window with no
+// Does nothing while vscodeToolsBridge.enabled is off, or in a window with no
 // folder open. That includes the runtime patches of other extensions.
 
 import * as vscode from 'vscode';
@@ -48,7 +48,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	);
 }
 
-const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', false)
+const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)
 	&& vscode.workspace.workspaceFolders?.[0]?.uri.scheme === 'file';
 
 /** Installs or removes the runtime patches: the Markdown Editor selection and the chat links. */
@@ -75,7 +75,7 @@ export function deactivate(): void {
 }
 
 async function start(): Promise<void> {
-	if (!vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', false)) {
+	if (!vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)) {
 		log.info('vscodeToolsBridge.enabled is off; bridge not started.');
 		return;
 	}

@@ -137,7 +137,7 @@ const pressButton = (name: string) => spawnSync('powershell.exe', [
 ], { encoding: 'utf8', timeout: 30_000 }).stdout.trim();
 try {
 	const file = discoveryFile(workspace);
-	// Off by default: wait for the extension to log that it stayed off, check
+	// Off while the setting is off: wait for the extension to log that it stayed off, check
 	// it wrote no discovery file, then turn it on the way a user would.
 	const logsDir = join(run, 'user-data', 'logs');
 	const bridgeLog = (): string => {
@@ -152,7 +152,7 @@ try {
 		const h = runHook(workspace);
 		results.push({ name: 'prompt hook, bridge off', ok: h.status === 0 && h.stdout === '', note: `exit ${h.status}, ${h.stdout.length} bytes, ${h.ms} ms` });
 	}
-	results.push({ name: 'off by default', ok: /enabled is off/.test(bridgeLog()) && !existsSync(file), note: existsSync(file) ? 'discovery file exists while disabled' : 'logged "enabled is off", no discovery file' });
+	results.push({ name: 'off while disabled', ok: /enabled is off/.test(bridgeLog()) && !existsSync(file), note: existsSync(file) ? 'discovery file exists while disabled' : 'logged "enabled is off", no discovery file' });
 	writeSettings(true);
 	for (let i = 0; i < 180 && !existsSync(file); i++) {
 		await new Promise(r => setTimeout(r, 500));
