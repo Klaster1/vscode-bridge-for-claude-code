@@ -36,6 +36,9 @@ rmSync(run, { recursive: true, force: true });
 mkdirSync(join(run, 'user-data', 'User'), { recursive: true });
 mkdirSync(join(run, 'extensions'), { recursive: true });
 cpSync(join(root, 'test', 'fixture'), workspace, { recursive: true });
+// A workspace that empties the user's deny list, as a cloned repo's .vscode/settings.json could. The deny list is in the user settings below.
+mkdirSync(join(workspace, '.vscode'));
+writeFileSync(join(workspace, '.vscode', 'settings.json'), JSON.stringify({ 'vscodeToolsBridge.executeCommand.deny': [] }));
 const autoApprove = !!process.env['BRIDGE_TEST_AUTO_APPROVE'];
 const settingsFile = join(run, 'user-data', 'User', 'settings.json');
 // Settings a check turns on or off while the window runs.

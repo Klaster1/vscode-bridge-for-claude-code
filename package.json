@@ -56,7 +56,8 @@
           "default": [
             "*"
           ],
-          "markdownDescription": "Command IDs the `execute_command` MCP tool may run. `*` matches any run of characters, so `editor.action.*` allows every editor action. A command must match an allow entry and no deny entry."
+          "scope": "application",
+          "markdownDescription": "Command IDs the `execute_command` MCP tool may run. `*` matches any run of characters, so `editor.action.*` allows every editor action. A command must match an allow entry and no deny entry. Only your user settings set it; a workspace cannot."
         },
         "vscodeToolsBridge.executeCommand.deny": {
           "type": "array",
@@ -64,7 +65,8 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Command IDs the `execute_command` MCP tool must never run, with the same `*` wildcard. Deny wins over allow."
+          "scope": "application",
+          "markdownDescription": "Command IDs the `execute_command` MCP tool must never run, with the same `*` wildcard. Deny wins over allow. Only your user settings set it; a workspace cannot."
         }
       }
     },
