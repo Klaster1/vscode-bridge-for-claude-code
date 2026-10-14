@@ -24,7 +24,7 @@ The bridge is on in every VS Code window by default. To turn it off in one works
 
 ## Install
 
-1. **Check the tools.** Run `node --version` (22.18 or later), `code --version` (1.138 or
+1. **Check the tools.** Run `node --version` (22.18 or later), `code --version` (1.140 or
    later) and `claude --version`. If `code` is missing, the user can add it to the PATH
    with the VS Code command **Shell Command: Install 'code' command in PATH** (macOS), or
    install the VSIX by hand as step 2 says.

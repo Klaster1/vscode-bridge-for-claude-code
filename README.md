@@ -80,7 +80,7 @@ To keep Claude from closing the window, for example:
 ## Install
 
 The bridge has two parts: a VS Code extension, and a Claude Code plugin that connects Claude Code
-to it. You need VS Code 1.138 or later, Node 22.18 or later, and Claude Code. The bridge is not on
+to it. You need VS Code 1.140 or later, Node 22.18 or later, and Claude Code. The bridge is not on
 the Marketplace.
 
 ### From a release

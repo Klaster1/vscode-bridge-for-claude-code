@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0] - 2026-10-14
+
+### Changed
+
+- VS Code 1.140 or later is required.
+
+### Security
+
+- Update the MCP SDK to 1.32.1, which fixes a high-severity flaw in its OAuth client.
+
 ## [0.4.0] - 2026-10-14
 
 ### Changed
