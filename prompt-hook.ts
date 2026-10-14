@@ -1,8 +1,9 @@
 // Claude Code UserPromptSubmit hook: tells Claude what the user has in view in
 // the VS Code window of this session and Claude Code itself does not report:
 // integrated-browser pages shared with the agent, image files open in an editor
-// group, and text selected in the Markdown Editor unless Claude Code's own
-// selection chip already shows it. It runs before each prompt is sent.
+// group, and text selected in the Markdown Editor unless it already reached the
+// Claude Code surface that runs this session (its selection chip, or the CLI).
+// It runs before each prompt is sent.
 //
 // Reads the hook payload from stdin (JSON with the session's `cwd`), finds that
 // window's bridge the same way launcher.ts does, asks it over MCP for
@@ -73,6 +74,12 @@ function mcpCall(pipe: string, token: string, messages: object[], ids: number[])
 const textOf = (result: ToolResult | undefined): string =>
 	result && !result.isError ? (result.content ?? []).map(c => c.text ?? '').join('\n') : '';
 
+// Where this prompt goes: Claude Code's chat panel shows a selection in its chip, and the CLI
+// connected through /ide gets it from VS Code. A CLI outside a VS Code terminal may not be
+// connected, so only one that has VS Code's port variable counts as served; the others get the note.
+const surface = process.env['CLAUDE_CODE_ENTRYPOINT'] === 'claude-vscode' ? 'chip'
+	: process.env['CLAUDE_CODE_ENTRYPOINT'] === 'cli' && process.env['CLAUDE_CODE_SSE_PORT'] ? 'cli' : undefined;
+
 try {
 	const payload = JSON.parse(await readStdin()) as { cwd?: string };
 	const record = findRecord(payload.cwd ?? process.cwd());
@@ -84,7 +91,7 @@ try {
 			{ jsonrpc: '2.0', method: 'notifications/initialized' },
 			{ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'shared_browser_pages', arguments: { snapshot: false } } },
 			{ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'visible_images', arguments: {} } },
-			{ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'markdown_editor_selection', arguments: { selectedOnly: true, skipDelivered: true } } },
+			{ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'markdown_editor_selection', arguments: { selectedOnly: true, ...(surface ? { skipDeliveredTo: surface } : {}) } } },
 		], [2, 3, 4]);
 		const sections: string[] = [];
 		const pages = textOf(results.get(2));

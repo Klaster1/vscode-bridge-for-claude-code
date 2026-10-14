@@ -13,11 +13,9 @@
 // once, and nothing is patched.
 
 import * as vscode from 'vscode';
-import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { claudeCodeApi, claudeCodeId } from './claudeApi.ts';
 import { globMatches } from './glob.ts';
 
-const claudeCodeId = 'anthropic.claude-code';
 const reported = new Set<string>();
 
 function reportOnce(report: (message: string) => void, key: string, message: string): void {
@@ -49,16 +47,14 @@ function opensInOtherEditor(uri: vscode.Uri): boolean {
 
 export function installChatLinks(report: (message: string) => void): vscode.Disposable {
 	const nothing = { dispose: () => undefined };
-	const claude = vscode.extensions.getExtension(claudeCodeId);
-	if (!claude) {
-		reportOnce(report, 'missing', `${claudeCodeId} is not installed; its links keep opening in the text editor.`);
+	const api = claudeCodeApi();
+	if (typeof api === 'string') {
+		reportOnce(report, 'missing', `${api}; its links keep opening in the text editor.`);
 		return nothing;
 	}
-	// The extension host caches one `vscode` API object per extension and picks it by the requiring file's path.
-	const api = createRequire(join(claude.extensionPath, 'extension.js'))('vscode') as typeof vscode | undefined;
-	const window: typeof vscode.window | undefined = api?.window;
-	const descriptor = window && Object.getOwnPropertyDescriptor(window, 'showTextDocument');
-	if (!api || api === vscode || !window || !descriptor || typeof descriptor.value !== 'function' || !descriptor.writable || !descriptor.configurable) {
+	const window = api.window;
+	const descriptor = Object.getOwnPropertyDescriptor(window, 'showTextDocument');
+	if (!descriptor || typeof descriptor.value !== 'function' || !descriptor.writable || !descriptor.configurable) {
 		reportOnce(report, 'api', `could not get a replaceable showTextDocument from ${claudeCodeId}'s API object; its links keep opening in the text editor.`);
 		return nothing;
 	}

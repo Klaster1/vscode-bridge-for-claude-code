@@ -27,7 +27,7 @@ the page toolbar. Claude knows which pages you share, so "this page" needs no ex
 Claude can look at an image file (PNG, JPEG, GIF or WebP) you have open in VS Code, and knows
 which one, so "this screenshot" needs no path. Text you select in the Markdown Editor shows in
 Claude Code's selection chip, and Claude gets it with your prompt, as it does for a text
-editor. The selection needs Claude Code's VS Code extension.
+editor. The selection needs Claude Code's VS Code extension, also when you use the CLI.
 
 If you don't see your selection, reopen the file.
 
@@ -40,6 +40,13 @@ from an extension. Without the bridge, Claude Code opens every link in the text 
 
 A link to a line or a heading opens the file at the top.
 
+## The Claude Code CLI
+
+You can also run `claude` in a terminal and connect it to VS Code with `/ide`. Claude then has
+the tools and sees the images you have open. The CLI shows your Markdown Editor selection, as it
+does for a text editor. Chat links do not apply, since they belong to the extension's chat
+panel. `/ide` needs Claude Code's VS Code extension installed.
+
 ## Settings
 
 | Setting | Default | Effect |
@@ -48,7 +55,7 @@ A link to a line or a heading opens the file at the top.
 | [`vscodeToolsBridge.executeCommand.allow`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
 | [`vscodeToolsBridge.executeCommand.deny`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. |
 | [`vscodeToolsBridge.autoApprove`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
-| [`vscodeToolsBridge.markdownEditor.selection`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload. |
+| [`vscodeToolsBridge.markdownEditor.selection`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload, except that the CLI needs a window reload after you turn it on. |
 | [`vscodeToolsBridge.claudeCode.chatLinks`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 
 To keep Claude from closing the window, for example:

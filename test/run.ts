@@ -119,11 +119,13 @@ let client: Client | undefined;
 
 // Runs prompt-hook.ts the way Claude Code runs a UserPromptSubmit hook: a
 // fresh process, the hook payload as JSON on stdin, cwd in the payload.
-const runHook = (cwd: string) => {
+const runHook = (cwd: string, surface: 'chip' | 'cli' | 'cli-without-vscode' = 'chip') => {
 	const started = Date.now();
 	const out = spawnSync(process.execPath, [join(root, 'prompt-hook.ts')], {
 		input: JSON.stringify({ session_id: 'test', transcript_path: '', cwd, permission_mode: 'default', hook_event_name: 'UserPromptSubmit', prompt: 'What is on the page?' }),
-		env, encoding: 'utf8', timeout: 5000,
+		// The chat panel's process has the entrypoint claude-vscode; a CLI in a VS Code terminal has cli and VS Code's port variable.
+		env: { ...env, CLAUDE_CODE_ENTRYPOINT: surface === 'chip' ? 'claude-vscode' : 'cli', ...(surface === 'cli' ? { CLAUDE_CODE_SSE_PORT: '1' } : {}) },
+		encoding: 'utf8', timeout: 5000,
 	});
 	return { stdout: out.stdout, stderr: out.stderr, status: out.status, ms: Date.now() - started };
 };
@@ -202,6 +204,8 @@ try {
 		});
 	};
 	const has = (n: string) => tools.some(t => t.name === n);
+	// The selections the stand-in's text editor selection listener got for notes.md: what the CLI would get.
+	const cliSelections = async () => (JSON.parse(textOf(await call('execute_command', { command: 'standin.selections' }))) as { uri: string; text: string }[]).filter(s => s.uri.endsWith('notes.md'));
 	await check('the bridge starts with the layout it found', async () => {
 		const groups = textOf(await call('execute_command', { command: 'standin.groupCount' }));
 		return groups === '1' || `${groups} editor groups`;
@@ -248,10 +252,21 @@ try {
 		console.log(`\n--- markdown_editor_selection after selectAll ---\n${all}`);
 		const lines = notes.split('\n').length - 1;
 		await check('markdown_editor_selection returns the selected text and lines', async () =>
-			all.includes(`notes.md (active), lines 1-${lines}, selected text:\n\`\`\`\n${notes}\n\`\`\``) || all.slice(0, 300));
+			all.includes(`notes.md (active), lines 1-${lines}`) && all.includes(`selected text:\n\`\`\`\n${notes}\n\`\`\``) || all.slice(0, 300));
 		const h = runHook(workspace);
 		const context = hookContext(h.stdout) ?? '';
-		results.push({ name: 'prompt hook reports the selection', ok: h.status === 0 && context.includes(`lines 1-${lines}, selected text:`) && context.includes('Second paragraph.') && /Markdown Editor/.test(context), note: `${h.ms} ms` });
+		results.push({ name: 'prompt hook reports the selection', ok: h.status === 0 && context.includes(`lines 1-${lines}`) && context.includes('selected text:') && context.includes('Second paragraph.') && /Markdown Editor/.test(context), note: `${h.ms} ms` });
+		// The CLI gets a selection from the listeners Claude Code registers for text editors.
+		await check('Claude Code CLI listener receives the selection', async () => {
+			const got = await cliSelections();
+			return got.some(s => s.text === notes) || JSON.stringify(got).slice(0, 300);
+		});
+		{
+			const forCli = runHook(workspace, 'cli');
+			results.push({ name: 'prompt hook skips the selection for a CLI that got it', ok: forCli.status === 0 && !(hookContext(forCli.stdout) ?? '').includes('Markdown Editor'), note: `${forCli.ms} ms` });
+			const unconnected = runHook(workspace, 'cli-without-vscode');
+			results.push({ name: 'prompt hook reports the selection to a CLI outside VS Code', ok: (hookContext(unconnected.stdout) ?? '').includes('Second paragraph.'), note: `${unconnected.ms} ms` });
+		}
 		await call('execute_command', { command: 'markdown.editor.cursorDocumentEnd' });
 		const cursor = await until(t => !t.includes('selected text:'));
 		console.log(`\n--- markdown_editor_selection after cursorDocumentEnd ---\n${cursor}`);
@@ -289,7 +304,7 @@ try {
 		await check('Claude Code webview receives the selection', async () =>
 			posted?.selectedText === notes && posted.startLine === 1 && posted.endLine === lines + 1 && /notes\.md$/.test(posted.filePath) || JSON.stringify(chipPosts).slice(0, 300));
 		const delivered = await until(t => t.includes('selection chip'));
-		await check('markdown_editor_selection marks the delivered selection', async () => /lines 1-\d+, shown in Claude Code's selection chip, selected text:/.test(delivered) || delivered.slice(0, 300));
+		await check('markdown_editor_selection marks the delivered selection', async () => /lines 1-\d+, shown in Claude Code's selection chip[^\n]*selected text:/.test(delivered) || delivered.slice(0, 300));
 		const skipped = runHook(workspace);
 		results.push({ name: 'prompt hook skips a selection the chip shows', ok: skipped.status === 0 && !(hookContext(skipped.stdout) ?? '').includes('Markdown Editor'), note: `${skipped.ms} ms` });
 		await call('execute_command', { command: 'markdown.editor.cursorDocumentEnd' });
@@ -377,6 +392,7 @@ try {
 		await call('execute_command', { command: 'standin.open' });
 		await new Promise(r => setTimeout(r, 3000));
 		const postsBefore = await postsToClaude();
+		const cliBefore = (await cliSelections()).length;
 		await selectAllInMarkdownEditor();
 		await check('Markdown Editor selection off: the tool reads nothing', async () => {
 			const t = textOf(await call('markdown_editor_selection', {}));
@@ -384,7 +400,8 @@ try {
 		});
 		await check('Markdown Editor selection off: nothing reaches Claude Code', async () => {
 			const after = await postsToClaude();
-			return after === postsBefore || `${postsBefore} -> ${after} posts`;
+			const cliAfter = (await cliSelections()).length;
+			return after === postsBefore && cliAfter === cliBefore || `${postsBefore} -> ${after} chip posts, ${cliBefore} -> ${cliAfter} CLI selections`;
 		});
 		{
 			const h = runHook(workspace);
@@ -399,7 +416,7 @@ try {
 		await check('Markdown Editor selection on again: the tool and Claude Code get the selection', async () => {
 			const t = textOf(await call('markdown_editor_selection', {}));
 			const after = await postsToClaude();
-			return /lines 1-\d+, shown in Claude Code's selection chip, selected text:/.test(t) && after > postsBefore || `${t.slice(0, 200)}; ${postsBefore} -> ${after} posts`;
+			return /lines 1-\d+, shown in Claude Code's selection chip[^\n]*selected text:/.test(t) && after > postsBefore || `${t.slice(0, 200)}; ${postsBefore} -> ${after} posts`;
 		});
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		await call('execute_command', { command: 'standin.close' });

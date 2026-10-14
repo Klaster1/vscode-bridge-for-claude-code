@@ -15,6 +15,7 @@
     "vscode": "^1.138.0"
   },
   "activationEvents": [
+    "*",
     "onStartupFinished",
     "onCustomEditor:vscode.markdown.editor",
     "onUri"
@@ -33,7 +34,7 @@
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "Report the text selected in the Markdown Editor: to Claude Code's selection chip, through the `markdown_editor_selection` tool and in the prompt hook's note. Works only while `#vscodeToolsBridge.enabled#` is on. A Markdown Editor that is open when you turn this on reports its selection after you reopen it."
+          "markdownDescription": "Report the text selected in the Markdown Editor: to Claude Code's selection chip, through the `markdown_editor_selection` tool and in the prompt hook's note. Works only while `#vscodeToolsBridge.enabled#` is on. A Markdown Editor that is open when you turn this on reports its selection after you reopen it, and the Claude Code CLI gets it after a window reload."
         },
         "vscodeToolsBridge.claudeCode.chatLinks": {
           "type": "boolean",

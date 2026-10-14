@@ -6,10 +6,14 @@
 const vscode = require('vscode');
 
 const received = [];
+const selections = [];
 let panel;
 
 exports.activate = context => {
 	context.subscriptions.push(
+		// What Claude Code's selection listener for the CLI reads: the editor's document and selection.
+		vscode.window.onDidChangeTextEditorSelection(e => selections.push({ uri: e.textEditor.document.uri.fsPath, text: e.textEditor.document.getText(e.textEditor.selection) })),
+		vscode.commands.registerCommand('standin.selections', () => selections),
 		vscode.commands.registerCommand('standin.open', () => {
 			panel = vscode.window.createWebviewPanel('standin', 'Claude Code stand-in', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableScripts: true, retainContextWhenHidden: true });
 			panel.webview.onDidReceiveMessage(m => {

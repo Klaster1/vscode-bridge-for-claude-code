@@ -513,7 +513,7 @@ const markdownEditorSelectionTool: BridgeTool = {
 			type: 'object',
 			properties: {
 				selectedOnly: { type: 'boolean', description: 'Report only editors with selected text. Default false.' },
-				skipDelivered: { type: 'boolean', description: 'Leave out editors whose selection Claude Code\'s selection chip already shows. Default false.' },
+				skipDeliveredTo: { type: 'string', enum: ['chip', 'cli'], description: 'Leave out editors whose selection already reached Claude Code\'s chat panel (`chip`) or the Claude Code CLI connected through /ide (`cli`).' },
 				maxChars: { type: 'number', description: 'Cap on each selected text. Default 4000.' },
 			},
 		},
@@ -525,7 +525,8 @@ const markdownEditorSelectionTool: BridgeTool = {
 		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
 		const entries: string[] = [];
 		for (const { uri, active, selection, delivered } of await markdownEditorSelections()) {
-			if (delivered && args['skipDelivered'] === true) {
+			const surface = args['skipDeliveredTo'];
+			if ((surface === 'chip' || surface === 'cli') && delivered[surface]) {
 				continue;
 			}
 			const name = `${uri.scheme === 'file' ? uri.fsPath : uri.toString()}${active ? ' (active)' : ''}`;
@@ -541,10 +542,10 @@ const markdownEditorSelectionTool: BridgeTool = {
 				const lines = selection.startLine === selection.endLine ? `line ${selection.startLine}` : `lines ${selection.startLine}-${selection.endLine}`;
 				const shown = selection.text.length > maxChars ? `${selection.text.slice(0, maxChars)}\n[selection truncated at ${maxChars} of ${selection.text.length} characters]` : selection.text;
 				const fence = fenceFor(shown);
-				entries.push(`- ${name}, ${lines}${delivered ? ', shown in Claude Code\'s selection chip' : ''}, selected text:\n${fence}\n${shown}\n${fence}`);
+				entries.push(`- ${name}, ${lines}${delivered.chip ? ', shown in Claude Code\'s selection chip' : ''}${delivered.cli ? ', sent to Claude Code in the terminal' : ''}, selected text:\n${fence}\n${shown}\n${fence}`);
 			}
 		}
-		return text(entries.length ? entries.join('\n') : args['skipDelivered'] === true ? 'No Markdown Editor has selected text beyond what Claude Code\'s selection chip shows.' : args['selectedOnly'] === true ? 'No Markdown Editor has selected text.' : 'No Markdown Editor is in front in an editor group.');
+		return text(entries.length ? entries.join('\n') : args['skipDeliveredTo'] ? 'No Markdown Editor has selected text beyond what Claude Code already has.' : args['selectedOnly'] === true ? 'No Markdown Editor has selected text.' : 'No Markdown Editor is in front in an editor group.');
 	},
 };
 
