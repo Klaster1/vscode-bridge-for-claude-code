@@ -19,9 +19,9 @@ Arguments are a JSON array. Three markers become VS Code objects:
 - `{"$position": {"line": 9, "character": 4}}` is a position.
 - `{"$range": {"start": {…}, "end": {…}}}` is a range.
 
-Positions and ranges are **0-based**, as in the VS Code API: line 10 in the editor is `"line": 9`.
-The `open_files` and `rename_symbol` tools and the comment commands below take 1-based lines.
-Results come back 0-based too.
+Positions and ranges, in the arguments and in the results, are **0-based**, as in the VS Code
+API: line 10 in the editor is `"line": 9`. The `open_files` and `rename_symbol` tools and the
+comment command below take 1-based lines.
 
 ## Ask the language server
 
@@ -36,8 +36,8 @@ re-exports and aliases that a text search misses.
 | What is the type's declaration? | `vscode.executeTypeDefinitionProvider` | `[{"$uri": …}, {"$position": …}]` |
 | Where is a symbol by name? | `vscode.executeWorkspaceSymbolProvider` | `["makeStore"]` |
 
-Each returns a list of locations with a `uri` and a `range`. The position must be on the symbol:
-read the line first and count its characters from 0.
+Each returns a list with a `uri` and a `range` per result; a symbol has them in its `location`.
+The position must be on the symbol: read the line first and count its characters from 0.
 
 `vscode.executeDocumentSymbolProvider` returns the whole symbol tree of a file, with three ranges
 per symbol, so its result is large. Read the file instead when you need its outline.
