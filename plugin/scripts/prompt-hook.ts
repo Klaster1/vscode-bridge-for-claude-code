@@ -87,7 +87,7 @@ try {
 		// The SDK server answers requests in order, so the initialize handshake
 		// and the calls can go out together.
 		const results = await mcpCall(record.pipe, record.token, [
-			{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'vscode-tools-bridge-prompt-hook', version: '0' } } },
+			{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'vscode-bridge-for-claude-code-prompt-hook', version: '0' } } },
 			{ jsonrpc: '2.0', method: 'notifications/initialized' },
 			{ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'shared_browser_pages', arguments: { snapshot: false } } },
 			{ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'visible_images', arguments: {} } },

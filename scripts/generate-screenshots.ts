@@ -190,7 +190,7 @@ Object.assign(env, {
 	DISABLE_AUTOUPDATER: '1',
 });
 // The bridge's default discovery folder is under LOCALAPPDATA, so it is isolated too. A
-// VSCODE_TOOLS_BRIDGE_DIR would not reach the CLI: VS Code drops VSCODE_* variables from terminals.
+// VSCODE_BRIDGE_DIR would not reach the CLI: VS Code drops VSCODE_* variables from terminals.
 process.env['LOCALAPPDATA'] = env['LOCALAPPDATA'];
 // The plugin from the working tree, as `npm run setup` installs it: it loads in place.
 for (const args of [['plugin', 'marketplace', 'add', root], ['plugin', 'install', 'vscode-bridge@vscode-bridge']]) {
@@ -204,7 +204,7 @@ const inputs = hashInputs(root); // Before packaging, so the record matches the 
 const vscodeVersion = '1.138.0';
 const exe = await downloadAndUnzipVSCode({ version: vscodeVersion, cachePath: join(root, '.vscode-test') });
 // Installed from a VSIX, as users get it: --extensionDevelopmentPath would put "[Extension Development Host]" in the title.
-const vsix = join(run, 'vscode-tools-bridge.vsix');
+const vsix = join(run, 'vscode-bridge-for-claude-code.vsix');
 const packaged = spawnSync(process.execPath, [join(root, 'node_modules', '@vscode', 'vsce', 'vsce'), 'package', '--allow-missing-repository', '--allow-star-activation', '--no-rewrite-relative-links', '--out', vsix], { cwd: root, encoding: 'utf8' });
 if (packaged.status !== 0) {
 	throw new Error(`vsce package failed:\n${packaged.stdout}\n${packaged.stderr}`);
@@ -342,7 +342,7 @@ try {
 
 	// Settings.
 	await resize(960, 980);
-	await command('workbench.action.openSettings', '@ext:local.vscode-tools-bridge');
+	await command('workbench.action.openSettings', '@ext:klaster1.vscode-bridge-for-claude-code');
 	await page.locator('.settings-editor .setting-item-contents').first().waitFor();
 	await sleep(500);
 	await page.keyboard.press('End'); // The search box sometimes opens with its text selected.

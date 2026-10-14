@@ -1,5 +1,5 @@
 ---
-name: install-vscode-tools-bridge
+name: install-vscode-bridge-for-claude-code
 description: Use when the user asks to install, set up, update or reinstall the VS Code Bridge for Claude Code from this clone, after a `git pull`, or to check that the bridge works ("is vscode-tools connected", "the bridge tools are missing"). Runs the setup script, makes the settings edits it only prints, each with the user's consent, and checks the result.
 ---
 
@@ -11,7 +11,7 @@ The bridge has two parts: a VS Code extension, and the `vscode-bridge` Claude Co
 it loads in place. The one edit left to you is `argv.json`, and it needs the user's consent.
 
 The bridge is on in every VS Code window by default. To turn it off in one workspace, set
-`"vscodeToolsBridge.enabled": false` in that workspace's settings.
+`"vscodeBridge.enabled": false` in that workspace's settings.
 
 ## Rules
 
@@ -42,7 +42,7 @@ The bridge is on in every VS Code window by default. To turn it off in one works
    that failed appears at the top of that list, with the command to run.
 3. **Skip the browser confirmations**, if the user wants it. Without this, VS Code shows a
    dialog before `open_browser_page`, `navigate_page` and `run_playwright_code` run.
-   1. In `~/.vscode/argv.json`, add `"enable-proposed-api": ["local.vscode-tools-bridge"]`.
+   1. In `~/.vscode/argv.json`, add `"enable-proposed-api": ["klaster1.vscode-bridge-for-claude-code"]`.
       If the key exists, add the ID to its array. The user can open the file with the
       VS Code command **Preferences: Configure Runtime Arguments**.
    2. Ask the user to quit and start VS Code again. A window reload does not read
@@ -61,12 +61,12 @@ from the clone, so its changes take effect in the next Claude Code session.
 1. Ask the user to start a new Claude Code session in the window's first workspace folder,
    or a folder below it. `/mcp` lists `plugin:vscode-bridge:vscode-tools` as connected.
 2. Call the `list_workspaces` tool. Its `bridge.loadedFrom` path is in VS Code's extensions
-   folder, under `local.vscode-tools-bridge-<version>`, with the version from
+   folder, under `klaster1.vscode-bridge-for-claude-code-<version>`, with the version from
    `package.json`. Any other path means VS Code runs another copy of the extension.
 3. Ask the user to open the **VS Code Bridge for Claude Code** output channel (**View: Toggle Output**,
    then pick the channel). It shows `Listening on <pipe> for <folder>`, and one line per
    tool call. The same log is on disk, in the newest session folder under VS Code's
-   `logs` folder: `window<N>/exthost/local.vscode-tools-bridge/VS Code Bridge for Claude Code.log`.
+   `logs` folder: `window<N>/exthost/klaster1.vscode-bridge-for-claude-code/VS Code Bridge for Claude Code.log`.
 4. To check the hook, run `echo '{"cwd":"<the workspace folder>"}' | node plugin/prompt-hook.mjs` in the clone.
    It exits with 0. It prints JSON only while a page is shared, an image is in front in an
    editor group or text is selected in a Markdown Editor; otherwise it prints nothing.

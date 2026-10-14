@@ -2,7 +2,7 @@
 // private named pipe, and writes a discovery file that lets the Claude Code
 // plugin's launcher and prompt hook (../plugin/scripts/) find the pipe from
 // their working directory.
-// While vscodeToolsBridge.enabled is off, or the first workspace folder is not a
+// While vscodeBridge.enabled is off, or the first workspace folder is not a
 // local folder, it serves no tools and installs no runtime patches.
 
 import * as vscode from 'vscode';
@@ -35,11 +35,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(vscode.window.registerUriHandler({
 		handleUri(uri) {
 			const id = uri.path === '/settings' ? new URLSearchParams(uri.query).get('id') : null;
-			if (id !== null && /^vscodeToolsBridge\.[\w.]+$/.test(id)) {
+			if (id !== null && /^vscodeBridge\.[\w.]+$/.test(id)) {
 				void vscode.commands.executeCommand('workbench.action.openSettings', id);
 			} else if (!refusedLogged) {
 				refusedLogged = true;
-				log.warn(`Ignored the link ${uri.toString()}: it is not a vscodeToolsBridge setting.`);
+				log.warn(`Ignored the link ${uri.toString()}: it is not a vscodeBridge setting.`);
 			}
 		},
 	}));
@@ -57,17 +57,17 @@ export function activate(context: vscode.ExtensionContext): void {
 			restart();
 		}),
 		vscode.workspace.onDidChangeConfiguration(e => {
-			if (e.affectsConfiguration('vscodeToolsBridge.enabled')) {
+			if (e.affectsConfiguration('vscodeBridge.enabled')) {
 				syncPatches();
 				restart();
-			} else if (patchSettings.some(([setting]) => e.affectsConfiguration(`vscodeToolsBridge.${setting}`))) {
+			} else if (patchSettings.some(([setting]) => e.affectsConfiguration(`vscodeBridge.${setting}`))) {
 				syncPatches();
 			}
 		}),
 	);
 }
 
-const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)
+const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeBridge').get<boolean>('enabled', true)
 	&& vscode.workspace.workspaceFolders?.[0]?.uri.scheme === 'file';
 
 /** The runtime patches, each switched by its own setting. */
@@ -78,7 +78,7 @@ const patchSettings: [setting: string, install: (report: (message: string) => vo
 
 /** Installs or removes each patch to match its setting; `removeAll` removes them regardless. */
 function syncPatches(removeAll = false): void {
-	const config = vscode.workspace.getConfiguration('vscodeToolsBridge');
+	const config = vscode.workspace.getConfiguration('vscodeBridge');
 	const enabled = !removeAll && isEnabled();
 	for (const [setting, install] of patchSettings) {
 		const wanted = enabled && config.get<boolean>(setting, true);
@@ -97,8 +97,8 @@ function syncPatches(removeAll = false): void {
 }
 
 async function start(): Promise<void> {
-	if (!vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)) {
-		log.info('vscodeToolsBridge.enabled is off; bridge not started.');
+	if (!vscode.workspace.getConfiguration('vscodeBridge').get<boolean>('enabled', true)) {
+		log.info('vscodeBridge.enabled is off; bridge not started.');
 		return;
 	}
 	const folder = vscode.workspace.workspaceFolders?.[0];
@@ -113,7 +113,7 @@ async function start(): Promise<void> {
 }
 
 async function serveMcp(input: PassThrough, socket: Socket): Promise<void> {
-	const server = new Server({ name: 'vscode-tools-bridge', version }, { capabilities: { tools: {} }, instructions: serverInstructions });
+	const server = new Server({ name: 'vscode-bridge-for-claude-code', version }, { capabilities: { tools: {} }, instructions: serverInstructions });
 	const info = () => ({
 		...(bridge.current ? { folder: bridge.current.record.folder, pipe: bridge.current.record.pipe, discoveryFile: bridge.current.file } : {}),
 		// Shows the extension host runs this .ts source through Node type stripping.

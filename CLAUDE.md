@@ -30,7 +30,7 @@ and Claude Code at runtime so that Claude sees what the user has open.
   - `skills/`: the skills that show Claude how to use the tools. `src/instructions.ts` names
     them.
 - `setup.ts` (`npm run setup`): installs from a clone: the VSIX into VS Code, and the plugin from
-  the clone, where it loads in place. The `.claude/skills/install-vscode-tools-bridge/` skill
+  the clone, where it loads in place. The `.claude/skills/install-vscode-bridge-for-claude-code/` skill
   runs it and makes the `argv.json` edit.
 - `test/`: see the "Tests" section.
 
@@ -189,7 +189,7 @@ section and an "Install" section.
 - State facts plainly, with no hedges.
 - No licence line: `LICENSE` holds the licence.
 - Link each setting name to the Settings editor, with
-  `vscode://local.vscode-tools-bridge/settings?id=<setting ID>` as the target.
+  `vscode://klaster1.vscode-bridge-for-claude-code/settings?id=<setting ID>` as the target.
 - Write short, plain sentences in simple present tense and active voice, one idea each.
 
 ## Code comments

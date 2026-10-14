@@ -21,7 +21,7 @@ for (let waited = 0; !record && waited < FIND_WINDOW_MS; waited += FIND_RETRY_MS
 	record = findRecord(cwd);
 }
 if (!record) {
-	process.stderr.write(`vscode-tools-bridge: no VS Code window has ${cwd} or a parent of it as its first workspace folder, or the bridge extension is not running there.\n`);
+	process.stderr.write(`vscode-bridge-for-claude-code: no VS Code window has ${cwd} or a parent of it as its first workspace folder, or the bridge extension is not running there.\n`);
 	process.exit(1);
 }
 
@@ -31,7 +31,7 @@ const socket = connect(record.pipe, () => {
 	socket.pipe(process.stdout);
 });
 socket.on('error', err => {
-	process.stderr.write(`vscode-tools-bridge: cannot reach the VS Code window for ${record.folder} at ${record.pipe}: ${err.message}. Is that window still open?\n`);
+	process.stderr.write(`vscode-bridge-for-claude-code: cannot reach the VS Code window for ${record.folder} at ${record.pipe}: ${err.message}. Is that window still open?\n`);
 	process.exit(1);
 });
 socket.on('close', () => process.exit(0));

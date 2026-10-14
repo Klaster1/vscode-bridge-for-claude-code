@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0] - 2026-10-14
+
+### Changed
+
+- New extension ID `klaster1.vscode-bridge-for-claude-code`: uninstall `local.vscode-tools-bridge`.
+- The settings start with `vscodeBridge.`, not `vscodeToolsBridge.`: rename yours in settings.json.
+- In `argv.json`, set `enable-proposed-api` to `klaster1.vscode-bridge-for-claude-code`.
+- The extension and the plugin find each other in a new folder: update both together.
+
+### Fixed
+
+- `execute_command` returns hover text, and the edits of renames, formats and code actions.
+
 ## [0.3.0] - 2026-10-14
 
 ### Added

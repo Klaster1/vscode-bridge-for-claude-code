@@ -1,16 +1,19 @@
 // Offline check of the Claude Code plugin in plugin/: its manifests agree with package.json, the
 // server instructions name its skills, and under a Node without type stripping, as an older Node
-// is, the launcher names the Node version it needs and the hook exits quietly. CI runs
+// is, the launcher names the Node version it needs and the hook exits quietly. A copy of the plugin
+// in another folder, as Claude Code's plugin cache holds, loads with no file from the repo. CI runs
 // `claude plugin validate --strict` on top.
 //
 //   node test/plugin-check.ts
 
 import { strict as assert } from 'node:assert';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import { serverInstructions } from '../src/instructions.ts';
 import { check, finish } from './harness.ts';
+import { reachableFiles } from './imports.ts';
 
 const root = join(import.meta.dirname, '..');
 const plugin = join(root, 'plugin');
@@ -35,6 +38,24 @@ await check('the MCP server and the hook run files the plugin has', () => {
 		assert.equal(command?.command, 'node');
 		const file = command.args[0]!.replace('${CLAUDE_PLUGIN_ROOT}', plugin);
 		assert.ok(existsSync(file), `${file} is missing`);
+	}
+});
+
+await check('the entry files import only files inside plugin/, since Claude Code installs a copy of that folder', () => {
+	for (const entry of ['launcher.mjs', 'prompt-hook.mjs']) {
+		const outside = reachableFiles(join(plugin, entry)).filter(file => relative(plugin, file).startsWith('..'));
+		assert.deepEqual(outside, [], `${entry} imports files outside plugin/`);
+	}
+});
+
+await check('the hook runs from a copy of plugin/ in a folder with a space, outside the repo', () => {
+	const folder = mkdtempSync(join(tmpdir(), 'bridge plugin '));
+	try {
+		cpSync(plugin, join(folder, 'plugin'), { recursive: true });
+		const result = spawnSync(process.execPath, [join(folder, 'plugin', 'prompt-hook.mjs')], { encoding: 'utf8', input: '{}', timeout: 20_000 });
+		assert.equal(result.status, 0, result.stderr);
+	} finally {
+		rmSync(folder, { recursive: true, force: true });
 	}
 });
 

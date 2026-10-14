@@ -71,7 +71,7 @@ export function installChatLinks(report: (message: string) => void): vscode.Disp
 				reportOnce(report, 'check', `checking a link failed: ${err instanceof Error ? err.message : String(err)}`);
 			}
 			// A rejected promise, not a throw: Claude Code chains .then on the result.
-			return reject ? Promise.reject(new Error('This file opens in a custom editor; vscode-tools-bridge leaves it to vscode.open.')) : original.apply(this, args);
+			return reject ? Promise.reject(new Error('This file opens in a custom editor; vscode-bridge-for-claude-code leaves it to vscode.open.')) : original.apply(this, args);
 		},
 	};
 	Object.defineProperty(window, 'showTextDocument', patched);

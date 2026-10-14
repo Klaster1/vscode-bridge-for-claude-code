@@ -7,7 +7,7 @@ description: Use when running VS Code commands through the vscode-tools MCP serv
 
 `execute_command` runs any VS Code command in the window the session works in and returns its
 result as JSON. `list_commands` finds command IDs by a substring, such as `git.` or `comment`. The
-user's `vscodeToolsBridge.executeCommand.allow` and `deny` settings decide which commands run.
+user's `vscodeBridge.executeCommand.allow` and `deny` settings decide which commands run.
 
 ## Arguments
 
@@ -34,10 +34,15 @@ re-exports and aliases that a text search misses.
 | Who uses it? | `vscode.executeReferenceProvider` | `[{"$uri": …}, {"$position": …}]` |
 | What implements this interface? | `vscode.executeImplementationProvider` | `[{"$uri": …}, {"$position": …}]` |
 | What is the type's declaration? | `vscode.executeTypeDefinitionProvider` | `[{"$uri": …}, {"$position": …}]` |
+| What is its type or documentation? | `vscode.executeHoverProvider` | `[{"$uri": …}, {"$position": …}]` |
 | Where is a symbol by name? | `vscode.executeWorkspaceSymbolProvider` | `["makeStore"]` |
 
 Each returns a list with a `uri` and a `range` per result; a symbol has them in its `location`.
 The position must be on the symbol: read the line first and count its characters from 0.
+
+A hover returns `contents`, a list of `{"value": "<Markdown text>"}`, such as a code block with the
+type, and the `range` it covers. Use it for a type or a doc comment, where the type checker's
+answer is shorter than reading the declaration.
 
 `vscode.executeDocumentSymbolProvider` returns the whole symbol tree of a file, with three ranges
 per symbol, so its result is large. Read the file instead when you need its outline.

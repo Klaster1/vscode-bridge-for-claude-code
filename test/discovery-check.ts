@@ -12,7 +12,7 @@ import { check, finish, skip } from './harness.ts';
 
 const temp = mkdtempSync(join(tmpdir(), 'dc-'));
 const discovery = join(temp, 'discovery');
-process.env['VSCODE_TOOLS_BRIDGE_DIR'] = discovery;
+process.env['VSCODE_BRIDGE_DIR'] = discovery;
 
 if (process.platform === 'win32') {
 	skip('ensureDiscoveryDir narrows a folder that exists with wider permissions', 'Windows has no permission bits');

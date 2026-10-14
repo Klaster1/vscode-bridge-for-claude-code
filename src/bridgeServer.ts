@@ -35,7 +35,7 @@ export function createBridgeListener(handlers: BridgeHandlers) {
 		const hash = folderHash(folder);
 		const record: DiscoveryRecord = {
 			pipe: process.platform === 'win32'
-				? `\\\\.\\pipe\\vscode-tools-bridge-${hash}-${randomBytes(8).toString('hex')}`
+				? `\\\\.\\pipe\\vscode-bridge-for-claude-code-${hash}-${randomBytes(8).toString('hex')}`
 				: join(discoveryDir(), `${hash}-${randomBytes(8).toString('hex')}.sock`),
 			token: randomBytes(32).toString('hex'),
 			folder,
