@@ -71,7 +71,7 @@
     "setup": "node setup.ts",
     "typecheck": "tsc -p .",
     "test": "node test/render-check.ts && node test/glob-check.ts && node test/run.ts",
-    "package": "vsce package --allow-missing-repository --skip-license"
+    "package": "vsce package --allow-missing-repository --skip-license --no-rewrite-relative-links"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
