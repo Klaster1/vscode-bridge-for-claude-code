@@ -76,6 +76,3 @@ Run `npm run setup` again, then ask the user to reload each VS Code window. The 
 4. To check the hook, run `echo '{"cwd":"<the workspace folder>"}' | node <the hook path from the settings file>`.
    It exits with 0. It prints JSON only while a page is shared, an image is in front in an
    editor group or text is selected in a Markdown Editor; otherwise it prints nothing.
-
-The "Troubleshooting" section of [README.md](../../../README.md) lists the common errors and
-their causes.
