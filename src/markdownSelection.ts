@@ -407,7 +407,6 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 	}
 
 	const disposables = [
-		vscode.window.tabGroups.onDidChangeTabs(e => e.closed.length && prune()),
 		// Claude Code replaces the chip with a text editor's selection on these events.
 		vscode.window.onDidChangeActiveTextEditor(editor => { chip = editor ? undefined : chip; }),
 		vscode.window.onDidChangeTextEditorSelection(e => {
@@ -428,7 +427,15 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 		}
 		frontUri = uri;
 	};
-	disposables.push(vscode.window.tabGroups.onDidChangeTabs(onTabs), vscode.window.tabGroups.onDidChangeTabGroups(onTabs));
+	disposables.push(
+		vscode.window.tabGroups.onDidChangeTabs(e => {
+			if (e.closed.length) {
+				prune();
+			}
+			onTabs();
+		}),
+		vscode.window.tabGroups.onDidChangeTabGroups(onTabs),
+	);
 	return {
 		dispose() {
 			active = false;
