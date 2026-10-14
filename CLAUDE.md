@@ -83,10 +83,13 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
   env -u ELECTRON_RUN_AS_NODE -u VSCODE_IPC_HOOK_CLI -u VSCODE_PID -u VSCODE_CWD -u VSCODE_NLS_CONFIG -u VSCODE_HANDLES_UNCAUGHT_ERRORS -u VSCODE_ESM_ENTRYPOINT -u VSCODE_CODE_CACHE_PATH -u VSCODE_CRASH_REPORTER_PROCESS_TYPE npm test
   ```
 
+- The **Connect Claude Code** check runs `claude mcp add`, so the `claude` CLI must be on `PATH`.
 - `BRIDGE_TEST_VSIX=<path>` tests a built VSIX instead of the source. The header of
   `test/run.ts` lists the other variables.
 - The "toolbar Share with Agent button found" check runs on Windows only, and it is known to
   flake. Run the test again before you look for a cause.
+- Every user-visible feature or fix comes with a test that fails without it. Add an end-to-end
+  check to `test/run.ts`, or an offline check like the ones `npm test` runs first.
 
 ## Screenshots
 
@@ -111,7 +114,49 @@ Every version bump adds its section to `CHANGELOG.md` in the same commit:
 
 `test/changelog-check.ts`, part of `npm test`, enforces these rules. It also checks that the top
 version equals the one in `package.json`. VS Code shows the file in the extension's Changelog
-tab. The planned release workflow is to use the top section as the GitHub Release notes.
+tab. The release workflow uses the top section as the GitHub Release notes.
+
+## Workflow
+
+- Work on a branch and open a pull request. Merge it only when the `test` check is green.
+- Branch protection needs a public repo or GitHub Pro, so this is a rule until then. Once the repo
+  is public, this command creates a ruleset that requires a pull request and the `test` check on
+  `main`:
+
+  ```sh
+  gh api repos/Klaster1/vscode-bridge-for-claude-code/rulesets --method POST --input - <<'JSON'
+  {
+    "name": "main",
+    "target": "branch",
+    "enforcement": "active",
+    "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+    "rules": [
+      { "type": "pull_request", "parameters": { "required_approving_review_count": 0, "dismiss_stale_reviews_on_push": false, "require_code_owner_review": false, "require_last_push_approval": false, "required_review_thread_resolution": false } },
+      { "type": "required_status_checks", "parameters": { "strict_required_status_checks_policy": false, "required_status_checks": [{ "context": "test" }] } }
+    ]
+  }
+  JSON
+  ```
+
+## CI and releases
+
+`.github/workflows/ci.yml` has two jobs.
+
+- `test` runs on every push and pull request, on a Windows runner, because the end-to-end test
+  drives real VS Code windows. It runs `npm ci`, `npm run typecheck`, `npm test` and
+  `npm run check-screenshots`, then builds the VSIX with `npm run package` and uploads it. CI uses
+  no tokens and never makes screenshots.
+- `release` runs after `test` passes on a push to `main`. If the tag `v<version>` does not
+  exist, it creates the tag on that commit and publishes a GitHub Release with the VSIX and the
+  top `CHANGELOG.md` section.
+
+To release:
+
+1. Bump `version` in `package.json`. Use semver, and choose the part yourself.
+2. Add the matching `CHANGELOG.md` section in the same commit.
+3. Land it on `main` through a pull request. CI tests it, then tags and releases it.
+
+A failed run releases nothing. The next green run on `main` releases the version.
 
 ## README
 
