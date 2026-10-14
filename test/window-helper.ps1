@@ -3,11 +3,10 @@
 # process ID passed in (the isolated instance's main process), found with Win32
 # EnumWindows, so it cannot reach the user's own VS Code or anything else:
 #
-# 1. Keeps the test window out of the user's way. -Hide minimize shows it
-#    minimized without activating it (ShowWindow SW_SHOWMINNOACTIVE);
-#    -Hide offscreen moves it to -32000,-32000 without activating it
-#    (SetWindowPos SWP_NOACTIVATE), which keeps it rendered. Either is
-#    re-applied if VS Code restores the window. It never activates a window.
+# 1. Keeps the test window out of the user's way. -Hide offscreen moves it
+#    to -32000,-32000 without activating it (SetWindowPos SWP_NOACTIVATE),
+#    which keeps it rendered, and moves it again if VS Code restores the
+#    window. -Hide none leaves it alone. It never activates a window.
 # 2. Answers the confirmation dialogs that tokenless tool calls raise. With
 #    the default window.dialogStyle ("native") these are OS task dialogs
 #    (Electron dialog.showMessageBox, class #32770). It reads the button names
@@ -29,7 +28,7 @@
 param(
 	[Parameter(Mandatory)] [int] $ProcessId,
 	[Parameter(Mandatory)] [string] $LogFile,
-	[ValidateSet('minimize', 'offscreen', 'none')] [string] $Hide = 'offscreen',
+	[ValidateSet('offscreen', 'none')] [string] $Hide = 'offscreen',
 	# Leave dialogs for a person to answer.
 	[switch] $NoClick,
 	[string] $InvokeButton
@@ -43,8 +42,6 @@ public delegate bool EnumProc(System.IntPtr hwnd, System.IntPtr lParam);
 [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern int GetClassName(System.IntPtr hwnd, System.Text.StringBuilder name, int max);
 [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr hwnd);
 [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool IsWindow(System.IntPtr hwnd);
-[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr hwnd);
-[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hwnd, int cmd);
 [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr hwnd, System.IntPtr after, int x, int y, int cx, int cy, uint flags);
 [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr hwnd, out RECT rect);
 [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr SendMessage(System.IntPtr hwnd, uint msg, System.IntPtr w, System.IntPtr l);
@@ -62,7 +59,6 @@ public static System.Collections.Generic.List<System.IntPtr> Windows(uint proces
 }
 '@
 $W = [Bridge.Win32]
-$SW_SHOWMINNOACTIVE = 7
 $SWP_NOSIZE_NOZORDER_NOACTIVATE = 0x0001 -bor 0x0004 -bor 0x0010
 $TDM_CLICK_BUTTON = 0x0466
 
@@ -75,10 +71,7 @@ $isButton = New-Object System.Windows.Automation.OrCondition(
 $isText = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, $ControlType::Text)
 
 function Hide-Window([System.IntPtr] $hwnd) {
-	if ($Hide -eq 'minimize' -and -not $W::IsIconic($hwnd)) {
-		[void]$W::ShowWindow($hwnd, $SW_SHOWMINNOACTIVE)
-		Add-Content -Path $LogFile -Value ("{0:HH:mm:ss.fff} window {1} minimized without activation" -f (Get-Date), $hwnd)
-	} elseif ($Hide -eq 'offscreen') {
+	if ($Hide -eq 'offscreen') {
 		$rect = New-Object Bridge.Win32+RECT
 		[void]$W::GetWindowRect($hwnd, [ref] $rect)
 		if ($rect.Left -gt -30000) {

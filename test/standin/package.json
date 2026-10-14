@@ -7,17 +7,6 @@
     "vscode": "^1.138.0"
   },
   "main": "./extension.js",
-  "activationEvents": [
-    "onCommand:standin.open",
-    "onCommand:standin.received",
-    "onCommand:standin.close",
-    "onCommand:standin.openLink",
-    "onCommand:standin.showDocument",
-    "onCommand:standin.activeTab",
-    "onCommand:standin.groupCount",
-    "onCommand:standin.setting",
-    "onCommand:standin.selections"
-  ],
   "contributes": {
     "commands": [
       {

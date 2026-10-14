@@ -14,7 +14,7 @@ import { findRecord } from './src/discovery.ts';
 const FIND_WINDOW_MS = 15_000;
 const FIND_RETRY_MS = 500;
 
-const cwd = process.env['VSCODE_TOOLS_BRIDGE_FOLDER'] ?? process.cwd();
+const cwd = process.cwd();
 let record = findRecord(cwd);
 for (let waited = 0; !record && waited < FIND_WINDOW_MS; waited += FIND_RETRY_MS) {
 	await new Promise(done => setTimeout(done, FIND_RETRY_MS));

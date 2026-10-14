@@ -26,10 +26,10 @@ the page toolbar. Claude knows which pages you share, so "this page" needs no ex
 
 ## Claude sees what you have open
 
-Claude can look at an image file (PNG, JPEG, GIF or WebP) you have open in VS Code, and knows
-which one, so "this screenshot" needs no path. Text you select in the Markdown Editor shows in
-Claude Code's selection chip, and Claude gets it with your prompt, as it does for a text
-editor. The selection needs Claude Code's VS Code extension, also when you use the CLI.
+Claude can look at an image file (PNG, JPEG, GIF or WebP) you have in front in an editor group,
+and knows which one, so "this screenshot" needs no path. Text you select in the Markdown Editor
+shows in Claude Code's selection chip, and Claude gets it with your prompt, as it does for a text
+editor.
 
 ![A Markdown Editor selection in Claude Code's selection chip](docs/screenshots/markdown-selection-chip.png)
 
@@ -49,7 +49,7 @@ A link to a line or a heading opens the file at the top.
 ## The Claude Code CLI
 
 You can also run `claude` in a terminal and connect it to VS Code with `/ide`. Claude then has
-the tools and sees the images you have open. The CLI shows your Markdown Editor selection, as it
+the tools and sees the images you have in front. The CLI shows your Markdown Editor selection, as it
 does for a text editor. Chat links do not apply, since they belong to the extension's chat
 panel. `/ide` needs Claude Code's VS Code extension installed.
 
@@ -62,10 +62,10 @@ panel. `/ide` needs Claude Code's VS Code extension installed.
 | Setting | Default | Effect |
 |---------|---------|--------|
 | [`vscodeToolsBridge.enabled`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.enabled) | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
-| [`vscodeToolsBridge.executeCommand.allow`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
-| [`vscodeToolsBridge.executeCommand.deny`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. |
+| [`vscodeToolsBridge.executeCommand.allow`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. Only your user settings set it, not a workspace's. |
+| [`vscodeToolsBridge.executeCommand.deny`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. Only your user settings set it, not a workspace's. |
 | [`vscodeToolsBridge.autoApprove`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
-| [`vscodeToolsBridge.markdownEditor.selection`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload, except that the CLI needs a window reload after you turn it on. |
+| [`vscodeToolsBridge.markdownEditor.selection`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. After you turn it on, reopen an open Markdown Editor, and reload the window for the CLI. |
 | [`vscodeToolsBridge.claudeCode.chatLinks`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 
 To keep Claude from closing the window, for example:
@@ -86,9 +86,7 @@ The bridge is not on the Marketplace.
    Extensions view.
 3. Reload each open VS Code window with **Developer: Reload Window**.
 4. Run **VS Code Bridge for Claude Code: Connect Claude Code** from the Command Palette. It asks
-   first, then adds the `vscode-tools` MCP server and the prompt hook to Claude Code. The prompt
-   hook lets Claude know the pages you share, the images you have open and your Markdown Editor
-   selection.
+   first, then adds the `vscode-tools` MCP server and the prompt hook to Claude Code.
 5. Run **Preferences: Configure Runtime Arguments**, add this line to `argv.json` and restart
    VS Code. It lets Claude use the browser without a confirmation dialog.
 
@@ -110,8 +108,8 @@ Without the skill, run this in the clone:
 npm run setup
 ```
 
-The script builds the extension, installs it into VS Code and adds `vscode-tools` to Claude
-Code. It then prints the steps left to you, with the paths filled in.
+The script builds the extension, installs it into VS Code and connects Claude Code to it, as
+**Connect Claude Code** does. It then prints the steps left to you, with the paths filled in.
 
 To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
 
@@ -119,9 +117,8 @@ To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
 
 When the extension starts, it writes `launcher.mjs` and `prompt-hook.mjs` to
 `%LOCALAPPDATA%\vscode-tools-bridge` on Windows, and to `~/.local/share/vscode-tools-bridge`
-elsewhere. Claude Code's configuration points at these two files, which keep their path when the
-extension updates. To do the Connect step yourself, replace `<folder>` below with that folder, with
-forward slashes.
+elsewhere. Claude Code's configuration points at these two files. To do the Connect step
+yourself, replace `<folder>` below with that folder, with forward slashes.
 
 1. Add the MCP server to Claude Code:
 
@@ -146,3 +143,9 @@ Start `claude` in the window's first workspace folder or a folder below it. `/mc
 call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
 
 ![vscode-tools connected in /mcp](docs/screenshots/mcp-connected.png)
+
+### Uninstall
+
+Uninstall the extension in the Extensions view, then restart VS Code. The restart removes what
+the extension added to Claude Code: the `vscode-tools` MCP server, the prompt hook, and the
+`launcher.mjs` and `prompt-hook.mjs` files. Entries that point at other files stay.

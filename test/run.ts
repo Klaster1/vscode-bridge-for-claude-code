@@ -1,4 +1,5 @@
-// End-to-end check in an isolated VS Code: downloads VS Code 1.138.0 into
+// End-to-end check in an isolated VS Code, on Windows only: it needs test/window-helper.ps1,
+// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.138.0 into
 // .vscode-test/, starts it with its own user-data and extensions folders and
 // this extension loaded from source, then talks to the bridge through
 // launcher.ts exactly as Claude Code would (stdio MCP, cwd = workspace root), through
@@ -11,6 +12,10 @@
 //   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeToolsBridge.autoApprove and the
 //                                proposed API it needs; with BRIDGE_TEST_NO_CLICK=1
 //                                the browser tools must then run with no dialog
+//   BRIDGE_TEST_NO_CLICK=1       leaves the confirmation dialogs for a person
+//   BRIDGE_TEST_WINDOW=none      leaves the test window where VS Code puts it; the
+//                                default, offscreen, moves it away without activating it
+//   BRIDGE_TEST_TRACE=1          starts VS Code with --log=trace
 
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,7 +29,13 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryFile, type DiscoveryRecord } from '../src/discovery.ts';
+import { commandLine } from '../src/shell.ts';
 import { shimPaths, writeShims } from '../src/shims.ts';
+
+if (process.platform !== 'win32') {
+	console.error('test/run.ts runs on Windows only. It starts VS Code windows and answers their dialogs with test/window-helper.ps1, which uses Win32 and UI Automation. CI runs it on Windows.');
+	process.exit(1);
+}
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = join(root, '.vscode-test', 'run');
@@ -36,6 +47,9 @@ rmSync(run, { recursive: true, force: true });
 mkdirSync(join(run, 'user-data', 'User'), { recursive: true });
 mkdirSync(join(run, 'extensions'), { recursive: true });
 cpSync(join(root, 'test', 'fixture'), workspace, { recursive: true });
+// A workspace that empties the user's deny list, as a cloned repo's .vscode/settings.json could. The deny list is in the user settings below.
+mkdirSync(join(workspace, '.vscode'));
+writeFileSync(join(workspace, '.vscode', 'settings.json'), JSON.stringify({ 'vscodeToolsBridge.executeCommand.deny': [] }));
 const autoApprove = !!process.env['BRIDGE_TEST_AUTO_APPROVE'];
 const settingsFile = join(run, 'user-data', 'User', 'settings.json');
 // Settings a check turns on or off while the window runs.
@@ -85,7 +99,7 @@ const vsix = process.env['BRIDGE_TEST_VSIX'];
 if (vsix) {
 	// Keep the CLI script path but replace its default user-data and extensions folders with ours.
 	const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(exe).filter(a => !/^--(user-data|extensions)-dir=/.test(a));
-	const installed = spawnSync(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix], { env, encoding: 'utf8', shell: process.platform === 'win32' });
+	const installed = spawnSync(commandLine(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix]), { env, encoding: 'utf8', shell: true });
 	console.log(installed.stdout, installed.stderr);
 }
 const code = spawn(exe, [
@@ -107,8 +121,7 @@ const code = spawn(exe, [
 // answers the confirmation dialogs that tokenless tool calls raise, touching
 // only windows of this instance's main process. BRIDGE_TEST_WINDOW picks how
 // the window is kept away: offscreen (default; stays rendered, which
-// Playwright's click needs), minimize (the page stops rendering and
-// click_element times out) or none.
+// Playwright's click needs) or none.
 // BRIDGE_TEST_NO_CLICK=1 leaves dialogs for a person (or the 15 s timeout).
 const dialogLog = join(run, 'window-helper.log');
 const clicker = process.platform === 'win32' && code.pid
@@ -122,6 +135,7 @@ const clicker = process.platform === 'win32' && code.pid
 let clickerErrors = '';
 clicker?.stderr?.on('data', d => { clickerErrors += String(d); });
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const results: { name: string; ok: boolean; note: string }[] = [];
 let client: Client | undefined;
 
@@ -160,7 +174,7 @@ try {
 		return existsSync(logsDir) ? walk(logsDir) : '';
 	};
 	for (let i = 0; i < 180 && !/enabled is off/.test(bridgeLog()); i++) {
-		await new Promise(r => setTimeout(r, 500));
+		await sleep(500);
 	}
 	{
 		const h = runHook(workspace);
@@ -169,7 +183,7 @@ try {
 	results.push({ name: 'off while disabled', ok: /enabled is off/.test(bridgeLog()) && !existsSync(file), note: existsSync(file) ? 'discovery file exists while disabled' : 'logged "enabled is off", no discovery file' });
 	writeSettings(true);
 	for (let i = 0; i < 180 && !existsSync(file); i++) {
-		await new Promise(r => setTimeout(r, 500));
+		await sleep(500);
 	}
 	if (!existsSync(file)) {
 		throw new Error(`No discovery file at ${file} after 90 s`);
@@ -245,7 +259,7 @@ try {
 		// A 1×1 PNG; vscode.open shows it in the image preview, as a click in the explorer does.
 		writeFileSync(join(workspace, 'shot.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
 		await call('execute_command', { command: 'vscode.open', args: [{ $uri: 'shot.png' }] });
-		await new Promise(r => setTimeout(r, 2000));
+		await sleep(2000);
 		await expectText('visible_images sees the image preview', 'visible_images', {}, /shot\.png \(active\)/);
 		const h = runHook(workspace);
 		const context = hookContext(h.stdout) ?? '';
@@ -261,7 +275,7 @@ try {
 		const until = async (done: (t: string) => boolean, ms = 20_000): Promise<string> => {
 			let t = await selectionNow();
 			for (const end = Date.now() + ms; !done(t) && Date.now() < end; t = await selectionNow()) {
-				await new Promise(r => setTimeout(r, 500));
+				await sleep(500);
 			}
 			return t;
 		};
@@ -300,7 +314,7 @@ try {
 			(JSON.parse(textOf(await call('execute_command', { command: 'standin.received' }))) as { message?: Posted }[]).flatMap(m => m.message ? [m.message] : []);
 		const selectionPosts = async (done: (n: number) => boolean) => {
 			let posts: Posted[] = [];
-			for (const end = Date.now() + 20_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 20_000; Date.now() < end; await sleep(500)) {
 				posts = (await standinMessages()).filter(m => m.request?.type === 'selection_changed');
 				if (done(posts.length)) {
 					break;
@@ -309,7 +323,7 @@ try {
 			return posts;
 		};
 		await check('stand-in webview is live', async () => {
-			for (const end = Date.now() + 20_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 20_000; Date.now() < end; await sleep(500)) {
 				if ((await standinMessages()).some(m => m.request?.type === 'focus_input')) {
 					return true;
 				}
@@ -355,7 +369,7 @@ try {
 		] as const) {
 			await check(`chat link to ${file} opens through ${route}`, async () => {
 				const via = await openLink(file);
-				await new Promise(r => setTimeout(r, 1500));
+				await sleep(1500);
 				const t = await tab();
 				await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 				return via === route && t.kind === kind && (t.viewType ?? undefined) === viewType && t.uri?.endsWith(file.replace('/', '\\')) || `via ${via}, tab ${JSON.stringify(t)}`;
@@ -363,7 +377,7 @@ try {
 		}
 		await check('showTextDocument with a TextDocument is not rejected', async () => {
 			const result = textOf(await call('execute_command', { command: 'standin.showDocument', args: [{ $uri: 'notes.md' }] })).replace(/^"|"$/g, '');
-			await new Promise(r => setTimeout(r, 1500));
+			await sleep(1500);
 			const t = await tab();
 			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 			return result === 'shown' && t.kind === 'text' || `${result}, tab ${JSON.stringify(t)}`;
@@ -373,16 +387,16 @@ try {
 		const setSetting = async (key: string, value: boolean) => {
 			overrides[`vscodeToolsBridge.${key}`] = value;
 			writeSettings(true);
-			for (const end = Date.now() + 30_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
 				if (textOf(await call('execute_command', { command: 'standin.setting', args: [key] })) === String(value)) {
 					break;
 				}
 			}
-			await new Promise(r => setTimeout(r, 1000));
+			await sleep(1000);
 		};
 		const followLink = async (file: string) => {
 			const via = await openLink(file);
-			await new Promise(r => setTimeout(r, 1500));
+			await sleep(1500);
 			const t = await tab();
 			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 			return `${via}, ${t.kind}`;
@@ -402,13 +416,13 @@ try {
 			.filter(m => m.message?.request?.type === 'selection_changed').length;
 		const selectAllInMarkdownEditor = async () => {
 			await call('execute_command', { command: 'vscode.openWith', args: [{ $uri: 'notes.md' }, 'vscode.markdown.editor'] });
-			await new Promise(r => setTimeout(r, 3000));
+			await sleep(3000);
 			await call('execute_command', { command: 'markdown.editor.selectAll' });
-			await new Promise(r => setTimeout(r, 3000));
+			await sleep(3000);
 		};
 		await setSetting('markdownEditor.selection', false);
 		await call('execute_command', { command: 'standin.open' });
-		await new Promise(r => setTimeout(r, 3000));
+		await sleep(3000);
 		const postsBefore = await postsToClaude();
 		const cliBefore = (await cliSelections()).length;
 		await selectAllInMarkdownEditor();
@@ -429,7 +443,7 @@ try {
 		await call('execute_command', { command: 'standin.close' });
 		await setSetting('markdownEditor.selection', true);
 		await call('execute_command', { command: 'standin.open' }); // Its first post lets the bridge find it again.
-		await new Promise(r => setTimeout(r, 3000));
+		await sleep(3000);
 		await selectAllInMarkdownEditor();
 		await check('Markdown Editor selection on again: the tool and Claude Code get the selection', async () => {
 			const t = textOf(await call('markdown_editor_selection', {}));
@@ -443,7 +457,7 @@ try {
 		const openSettingsLink = (url: string) => spawnSync(exe, ['--open-url', url, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`], { env, timeout: 30_000 });
 		const activeLabel = async () => (await tab() as { label?: string }).label;
 		const waitForLabel = async (label: string) => {
-			for (const end = Date.now() + 15_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 15_000; Date.now() < end; await sleep(500)) {
 				if (await activeLabel() === label) {
 					return true;
 				}
@@ -454,7 +468,7 @@ try {
 		results.push({ name: 'a setting link opens the Settings editor', ok: await waitForLabel('Settings'), note: `active tab: ${await activeLabel()}` });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=workbench.colorTheme');
-		await new Promise(r => setTimeout(r, 5000));
+		await sleep(5000);
 		results.push({ name: 'a link to another extension\'s setting is ignored', ok: await activeLabel() !== 'Settings' && /Ignored the link/.test(bridgeLog()), note: `active tab: ${await activeLabel()}` });
 	}
 
@@ -463,8 +477,10 @@ try {
 		const shims = shimPaths();
 		const dir = dirname(shims.launcher);
 		const shimText = (file: string) => readFileSync(join(dir, file), 'utf8');
+		// The shims load the copy that runs: the clone, or the installed VSIX in the isolated extensions folder.
+		const extensionRoot = vsix ? join(run, 'extensions', readdirSync(join(run, 'extensions')).find(name => /^local\.vscode-tools-bridge-\d/.test(name)) ?? 'not-installed') : root;
 		// VS Code may write the drive letter in lower case.
-		const loads = (file: string, target: string) => shimText(file).toLowerCase().includes(pathToFileURL(join(root, target)).href.toLowerCase());
+		const loads = (file: string, target: string) => shimText(file).toLowerCase().includes(pathToFileURL(join(extensionRoot, target)).href.toLowerCase());
 		results.push({ name: 'the extension wrote the launcher and hook shims', ok: loads('launcher.mjs', 'launcher.ts') && loads('prompt-hook.mjs', 'prompt-hook.ts'), note: dir });
 		// What setup.ts writes for a clone, in a throwaway folder: complete, then left alone, then repaired.
 		const clone = join(run, 'clone-shims');
@@ -496,9 +512,9 @@ try {
 	// Terminal: run a command through the keyboard-input command, then read it back.
 	await check('terminal setup', async () => {
 		await call('execute_command', { command: 'workbench.action.terminal.new' });
-		await new Promise(r => setTimeout(r, 8000));
+		await sleep(8000);
 		await call('execute_command', { command: 'workbench.action.terminal.sendSequence', args: [{ text: 'echo bridge-marker-42\r' }] });
-		await new Promise(r => setTimeout(r, 4000));
+		await sleep(4000);
 		return true;
 	});
 	if (has('terminal_last_command')) {
@@ -588,14 +604,14 @@ try {
 					changes.push(`${Date.now() - started} ms: ${now ? 'shared' : 'not shared'}`);
 					last = now;
 				}
-				await new Promise(r => setTimeout(r, 300));
+				await sleep(300);
 			}
 			console.log(`
 ${label}: ${changes.join(', ')}`);
 			return !!last;
 		};
 		await call('execute_command', { command: 'workbench.action.browser.open', args: [userUrl] });
-		await new Promise(r => setTimeout(r, 3000));
+		await sleep(3000);
 		const before = runHook(workspace);
 		results.push({ name: 'prompt hook ignores an unshared page', ok: !(hookContext(before.stdout) ?? '').includes('shared-by-user'), note: `${before.ms} ms` });
 		const pressed = pressButton('Share with Agent');

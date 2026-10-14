@@ -2,19 +2,16 @@
 // private named pipe, and writes a discovery file that lets Claude Code's
 // stdio launcher (../launcher.ts) and prompt hook (../prompt-hook.ts) find the
 // pipe from their working directory.
-// Does nothing while vscodeToolsBridge.enabled is off, or in a window with no
-// folder open. That includes the runtime patches of other extensions.
+// While vscodeToolsBridge.enabled is off, or the first workspace folder is not a
+// local folder, it serves no tools and installs no runtime patches.
 
 import * as vscode from 'vscode';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type Server as NetServer, type Socket } from 'node:net';
-import { join } from 'node:path';
-import { PassThrough } from 'node:stream';
+import type { Socket } from 'node:net';
+import type { PassThrough } from 'node:stream';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { discoveryDir, discoveryFile, folderHash, type DiscoveryRecord } from './discovery.ts';
+import { createBridgeListener } from './bridgeServer.ts';
 import { installChatLinks } from './chatLinks.ts';
 import { registerConnect } from './connect.ts';
 import { serverInstructions } from './instructions.ts';
@@ -24,11 +21,17 @@ import { allTools } from './tools.ts';
 
 let log: vscode.LogOutputChannel;
 const patches = new Map<string, vscode.Disposable>();
-let current: { server: NetServer; file: string; record: DiscoveryRecord } | undefined;
+const bridge = createBridgeListener({
+	serve: (input, socket) => void serveMcp(input, socket),
+	warn: message => log.warn(message),
+	debug: message => log.debug(message),
+});
+let version: string;
 
 export function activate(context: vscode.ExtensionContext): void {
+	version = (context.extension.packageJSON as { version: string }).version;
 	log = vscode.window.createOutputChannel('VS Code Bridge for Claude Code', { log: true });
-	context.subscriptions.push(log, { dispose: stop }, { dispose: () => syncPatches(true) });
+	context.subscriptions.push(log, { dispose: bridge.stop }, { dispose: () => syncPatches(true) });
 	// Opens the Settings editor at one of this extension's settings, for the links in the README. Only `id` counts; other parameters, such as one a redirect adds, are ignored.
 	let refusedLogged = false;
 	context.subscriptions.push(vscode.window.registerUriHandler({
@@ -53,7 +56,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	}
 	registerConnect(context, log);
 	const restart = () => {
-		stop();
+		bridge.stop();
 		start().catch(err => log.error(`Bridge failed to start: ${err instanceof Error ? err.message : String(err)}`));
 	};
 	// Install the patches before returning, so a Markdown Editor opened right after activation is covered.
@@ -105,11 +108,6 @@ function syncPatches(removeAll = false): void {
 	}
 }
 
-export function deactivate(): void {
-	syncPatches(true);
-	stop();
-}
-
 async function start(): Promise<void> {
 	if (!vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)) {
 		log.info('vscodeToolsBridge.enabled is off; bridge not started.');
@@ -120,85 +118,16 @@ async function start(): Promise<void> {
 		log.info('No local workspace folder; bridge not started.');
 		return;
 	}
-	const hash = folderHash(folder.uri.fsPath);
-	const suffix = randomBytes(8).toString('hex');
-	const record: DiscoveryRecord = {
-		pipe: process.platform === 'win32'
-			? `\\\\.\\pipe\\vscode-tools-bridge-${hash}-${suffix}`
-			: join(discoveryDir(), `${hash}-${suffix}.sock`),
-		token: randomBytes(32).toString('hex'),
-		folder: folder.uri.fsPath,
-		pid: process.pid,
-	};
-	const server = createServer(socket => handleConnection(socket, record.token));
-	await new Promise<void>((resolve, reject) => {
-		server.once('error', reject);
-		server.listen(record.pipe, resolve);
-	});
-	const file = discoveryFile(folder.uri.fsPath);
-	mkdirSync(discoveryDir(), { recursive: true, mode: 0o700 });
-	// A second window on the same first folder takes over the file; the
-	// earlier window keeps its pipe but is no longer found.
-	writeFileSync(file, JSON.stringify(record, null, 2), { mode: 0o600 });
-	current = { server, file, record };
-	log.info(`Listening on ${record.pipe} for ${record.folder} (discovery file ${file})`);
-}
-
-function stop(): void {
-	if (!current) {
-		return;
+	const listening = await bridge.start(folder.uri.fsPath);
+	if (listening) {
+		log.info(`Listening on ${listening.record.pipe} for ${listening.record.folder} (discovery file ${listening.file})`);
 	}
-	const { server, file, record } = current;
-	current = undefined;
-	server.close();
-	try {
-		// Remove the file only if another window has not taken it over.
-		if ((JSON.parse(readFileSync(file, 'utf8')) as DiscoveryRecord).token === record.token) {
-			rmSync(file);
-		}
-	} catch {
-		// Already gone.
-	}
-}
-
-/**
- * The first line on a connection must be the token from the discovery file;
- * anything else closes the connection. The rest of the stream is MCP
- * (newline-delimited JSON-RPC), served by a fresh MCP server per connection.
- */
-function handleConnection(socket: Socket, token: string): void {
-	let buffered = Buffer.alloc(0);
-	const expected = Buffer.from(token);
-	const onData = (chunk: Buffer) => {
-		buffered = Buffer.concat([buffered, chunk]);
-		const newline = buffered.indexOf(0x0a);
-		if (newline < 0) {
-			if (buffered.length > 256) {
-				socket.destroy();
-			}
-			return;
-		}
-		socket.off('data', onData);
-		const offered = buffered.subarray(0, newline);
-		if (offered.length !== expected.length || !timingSafeEqual(offered, expected)) {
-			log.warn('Rejected a connection with a wrong token.');
-			socket.destroy();
-			return;
-		}
-		const input = new PassThrough();
-		input.write(buffered.subarray(newline + 1));
-		socket.pipe(input);
-		void serveMcp(input, socket);
-	};
-	socket.on('data', onData);
-	socket.on('error', err => log.debug(`Connection error: ${err.message}`));
 }
 
 async function serveMcp(input: PassThrough, socket: Socket): Promise<void> {
-	const version = String((vscode.extensions.getExtension('local.vscode-tools-bridge')?.packageJSON as { version?: string } | undefined)?.version ?? '0.0.0');
 	const server = new Server({ name: 'vscode-tools-bridge', version }, { capabilities: { tools: {} }, instructions: serverInstructions });
 	const info = () => ({
-		...(current ? { folder: current.record.folder, pipe: current.record.pipe, discoveryFile: current.file } : {}),
+		...(bridge.current ? { folder: bridge.current.record.folder, pipe: bridge.current.record.pipe, discoveryFile: bridge.current.file } : {}),
 		// Shows the extension host runs this .ts source through Node type stripping.
 		node: process.version,
 		typeStripping: (process.features as { typescript?: string }).typescript ?? null,

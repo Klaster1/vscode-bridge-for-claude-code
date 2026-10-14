@@ -24,6 +24,8 @@ class ToolResultPrompt extends PromptElement<ToolResultProps> {
 	}
 }
 
+const partTokens = (part: Raw.ChatCompletionContentPart): number => 'text' in part ? Math.ceil(part.text.length / 4) : 1;
+
 /**
  * Copilot's tools return prompt-tsx trees (LanguageModelPromptTsxPart) that are
  * meant to be laid out into a model prompt. This renders one to plain text
@@ -33,13 +35,11 @@ class ToolResultPrompt extends PromptElement<ToolResultProps> {
  */
 const roughTokenizer: ITokenizer<typeof OutputMode.Raw> = {
 	mode: OutputMode.Raw,
-	tokenLength(part: Raw.ChatCompletionContentPart) {
-		return 'text' in part ? Math.ceil(part.text.length / 4) : 1;
-	},
+	tokenLength: partTokens,
 	countMessageTokens(message: Raw.ChatMessage) {
 		let n = 4;
 		for (const part of message.content) {
-			n += 'text' in part ? Math.ceil(part.text.length / 4) : 1;
+			n += partTokens(part);
 		}
 		return n;
 	},

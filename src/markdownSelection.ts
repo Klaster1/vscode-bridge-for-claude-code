@@ -18,9 +18,8 @@
 // passed to them as if a text editor had changed it. The wrapper must be in
 // place before Claude Code subscribes, so the extension activates at startup.
 //
-// Whatever the patch relies on and cannot find (the setter, the page's meta
-// tags, <head>, a message from the page) is logged once, and the patch then
-// does nothing. No error reaches the Markdown extension.
+// Whatever the patch relies on and cannot find is logged once, and the part
+// that needs it stays off. No error reaches the Markdown extension.
 
 import * as vscode from 'vscode';
 import { claudeCodeApi } from './claudeApi.ts';
@@ -43,7 +42,7 @@ interface Editor {
 	updated: number;
 }
 
-export interface MarkdownEditorState {
+interface MarkdownEditorState {
 	uri: vscode.Uri;
 	active: boolean;
 	/** Absent when the editor has not reported a selection. Lines are 1-based; an empty `text` means a cursor. */
@@ -407,7 +406,6 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 	}
 
 	const disposables = [
-		vscode.window.tabGroups.onDidChangeTabs(e => e.closed.length && prune()),
 		// Claude Code replaces the chip with a text editor's selection on these events.
 		vscode.window.onDidChangeActiveTextEditor(editor => { chip = editor ? undefined : chip; }),
 		vscode.window.onDidChangeTextEditorSelection(e => {
@@ -428,7 +426,15 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 		}
 		frontUri = uri;
 	};
-	disposables.push(vscode.window.tabGroups.onDidChangeTabs(onTabs), vscode.window.tabGroups.onDidChangeTabGroups(onTabs));
+	disposables.push(
+		vscode.window.tabGroups.onDidChangeTabs(e => {
+			if (e.closed.length) {
+				prune();
+			}
+			onTabs();
+		}),
+		vscode.window.tabGroups.onDidChangeTabGroups(onTabs),
+	);
 	return {
 		dispose() {
 			active = false;
