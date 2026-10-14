@@ -18,9 +18,8 @@
 // passed to them as if a text editor had changed it. The wrapper must be in
 // place before Claude Code subscribes, so the extension activates at startup.
 //
-// Whatever the patch relies on and cannot find (the setter, the page's meta
-// tags, <head>, a message from the page) is logged once, and the patch then
-// does nothing. No error reaches the Markdown extension.
+// Whatever the patch relies on and cannot find is logged once, and the part
+// that needs it stays off. No error reaches the Markdown extension.
 
 import * as vscode from 'vscode';
 import { claudeCodeApi } from './claudeApi.ts';

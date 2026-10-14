@@ -2,8 +2,8 @@
 // private named pipe, and writes a discovery file that lets Claude Code's
 // stdio launcher (../launcher.ts) and prompt hook (../prompt-hook.ts) find the
 // pipe from their working directory.
-// Does nothing while vscodeToolsBridge.enabled is off, or in a window with no
-// folder open. That includes the runtime patches of other extensions.
+// While vscodeToolsBridge.enabled is off, or the first workspace folder is not a
+// local folder, it serves no tools and installs no runtime patches.
 
 import * as vscode from 'vscode';
 import type { Socket } from 'node:net';
