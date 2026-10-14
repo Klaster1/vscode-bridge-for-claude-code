@@ -17,6 +17,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { discoveryDir, discoveryFile, folderHash, type DiscoveryRecord } from './discovery.ts';
 import { installChatLinks } from './chatLinks.ts';
 import { registerConnect } from './connect.ts';
+import { serverInstructions } from './instructions.ts';
 import { installMarkdownSelection } from './markdownSelection.ts';
 import { writeShims } from './shims.ts';
 import { allTools } from './tools.ts';
@@ -195,7 +196,7 @@ function handleConnection(socket: Socket, token: string): void {
 
 async function serveMcp(input: PassThrough, socket: Socket): Promise<void> {
 	const version = String((vscode.extensions.getExtension('local.vscode-tools-bridge')?.packageJSON as { version?: string } | undefined)?.version ?? '0.0.0');
-	const server = new Server({ name: 'vscode-tools-bridge', version }, { capabilities: { tools: {} } });
+	const server = new Server({ name: 'vscode-tools-bridge', version }, { capabilities: { tools: {} }, instructions: serverInstructions });
 	const info = () => ({
 		...(current ? { folder: current.record.folder, pipe: current.record.pipe, discoveryFile: current.file } : {}),
 		// Shows the extension host runs this .ts source through Node type stripping.

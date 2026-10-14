@@ -8,6 +8,7 @@ and Claude Code at runtime so that Claude sees what the user has open.
 - `src/extension.ts`: activation, the per-window MCP server on a named pipe (a Unix socket on
   macOS and Linux), the discovery file, the URI handler for setting links, and the switch for
   each runtime patch.
+- `src/instructions.ts`: the MCP server instructions, which tell Claude when the tools fit.
 - `src/tools.ts`: the MCP tools. Some use the stable API. The rest forward VS Code's and
   Copilot's language-model tools from `vscode.lm.tools`. `src/render.ts` turns their
   prompt-tsx results into text.
@@ -142,8 +143,8 @@ tab. The release workflow uses the top section as the GitHub Release notes.
 
 `.github/workflows/ci.yml` has two jobs.
 
-- `test` runs on every push and pull request, on a Windows runner, because the end-to-end test
-  drives real VS Code windows. It runs `npm ci`, `npm run typecheck`, `npm test` and
+- `test` runs on every pull request and every push to `main`, on a Windows runner, because the
+  end-to-end test drives real VS Code windows. It runs `npm ci`, `npm run typecheck`, `npm test` and
   `npm run check-screenshots`, then builds the VSIX with `npm run package` and uploads it. CI uses
   no tokens and never makes screenshots.
 - `release` runs after `test` passes on a push to `main`. If the tag `v<version>` does not

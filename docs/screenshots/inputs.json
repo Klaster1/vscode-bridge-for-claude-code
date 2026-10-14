@@ -1,8 +1,8 @@
 {
-	"hash": "76bd5f175fe8ec4b743088e0fef19f910fe030a8a20ed6c51463221e81e3a3ac",
+	"hash": "8a8d1c85bb1f8816c2a8372906befd7244cf99a4bbdc0ebf8ae1c3dd755e5550",
 	"files": {
 		"launcher.ts": "06ccbf2d1e5c75f0b35412a702c46bc70b9549c670b91cbedffbd580643413b8",
-		"package.json": "3712aa1b92c0e4190c66a59ca6a6334d7be56793e47543b184cc5b1046d34f86",
+		"package.json": "e0866f8352a6ee587f6e7dcd320becca0436617825dde04943e47d91ce916058",
 		"scripts/generate-screenshots.ts": "41a48401b8b3933b5d4fdb87487a2ba9a7d4092a24ab7c5a4283af498c4a2c5e",
 		"scripts/screenshot-fixture/docs/forecast-api.md": "6ab5f1aa78e0497f6c1775eb58be2aa5fbfb3696ac63e57feb648b188eff0d42",
 		"scripts/screenshot-fixture/package.json": "57eb6bad716f2dbd4b20240a82c03702635e7e558a9e07193c2d48ba4951a2bc",
@@ -14,8 +14,9 @@
 		"src/claudeApi.ts": "8754c857e3136a17317a5386202d81148e3995e3cd1cee71bfe9d8202798e049",
 		"src/connect.ts": "e09aaa0839b9ab81ba65b210a41ade3184ad2a6a42babd01c4a196b5a89ac146",
 		"src/discovery.ts": "bc8e720e241fbc88b0aa323a55a8c9c610a974878163713ce21e13040f1e62bf",
-		"src/extension.ts": "c85cf8b5638927c092a76463f8967f2cc5f8f168f95a1cc1a551ee249e2045fb",
+		"src/extension.ts": "b2ba3698aed3517e5cda3ce59c0cb91f73966e20d72744f508feefd64e7ed910",
 		"src/glob.ts": "df7049e18d1483cbfe6637c6dbe2f635094c30d153ba10b404ac04debf0f9113",
+		"src/instructions.ts": "6a572850553aa7c1fe511bf1293fe1faa52aaa5a79b3352dee6195c01cae57df",
 		"src/markdownSelection.ts": "349735b7bd623238ad26bad38bf6707c16cad1089647d38866285aa059d4ddbd",
 		"src/render.ts": "09b2c915edbb1bf421402c45420c2d38011a2d9e696e04fb8b630f391e24a1ed",
 		"src/shims.ts": "7b445be904312db6815b5d16eb395a2fdc261215c45d2833d4aa27b1d98f3ff9",

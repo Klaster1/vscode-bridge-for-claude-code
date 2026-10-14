@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.0] - 2026-10-14
+
+### Added
+
+- Claude knows when to use the bridge: page screenshots, viewport sizes, go to definition, diffs.
+
 ## [0.0.1] - 2026-10-14
 
 ### Added
