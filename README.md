@@ -17,10 +17,17 @@ this file for type errors", and Claude picks the tool.
 | `list_workspaces` | The window's workspace folders. |
 | `semantic_search`, `vscode_api_reference` | Copilot's codebase search and VS Code API reference. Needs GitHub Copilot, signed in. |
 | `terminal_selection`, `terminal_last_command` | The text selected in the terminal, and the terminal's last command. Needs VS Code chat. |
+| `open_browser_page`, `read_page`, `screenshot_page`, `click_element` and other browser tools | Open, read and screenshot pages in VS Code's integrated browser, click, hover, drag and type there, and run Playwright code. Needs `workbench.browser.enableChatTools` on. |
+
+To show Claude a page you have open in the integrated browser, press **Share with Agent** in
+the page toolbar. With the prompt hook from the install steps, each prompt tells Claude which
+pages you share, so "this page" needs no more explanation.
 
 Limits:
 
 - `execute_command` asks you nothing before it runs a command.
+- VS Code asks you before Claude opens a page, navigates or runs Playwright code. Claude waits
+  until you answer the dialog in the VS Code window.
 - `get_diagnostics` opens each file it checks in a background preview tab, because TypeScript checks only open files.
 - `get_diagnostics` waits 3 seconds on a file with no problems.
 - Claude sees the Copilot and terminal tools only while the window has them.
@@ -31,32 +38,13 @@ Settings:
 |---------|---------|--------|
 | `vscodeToolsBridge.executeCommand.allow` | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
 | `vscodeToolsBridge.executeCommand.deny` | `[]` | Command IDs it must never run. Deny wins over allow. |
+| `vscodeToolsBridge.autoApprove` | `false` | Skips the browser dialog. |
 
 To keep Claude from closing the window, for example:
 
 ```jsonc
 "vscodeToolsBridge.executeCommand.deny": ["workbench.action.quit", "workbench.action.closeWindow"]
 ```
-
-## Claude drives the integrated browser
-
-Turn on `workbench.browser.enableChatTools`. Claude can then open pages, read them, take
-screenshots, click, hover, drag, type and run Playwright code in VS Code's integrated browser.
-
-To show Claude a page you have open, press **Share with Agent** in the page toolbar. With the
-prompt hook from the install steps, each prompt tells Claude which pages you share, so "this
-page" needs no more explanation.
-
-Limits:
-
-- VS Code asks you before Claude opens a page, navigates or runs Playwright code. Claude waits
-  until you answer the dialog in the VS Code window.
-
-Settings:
-
-| Setting | Default | Effect |
-|---------|---------|--------|
-| `vscodeToolsBridge.autoApprove` | `false` | Skips that dialog. |
 
 `autoApprove` works only after you run **Preferences: Configure Runtime Arguments**, add this
 line to `argv.json` and restart VS Code:
