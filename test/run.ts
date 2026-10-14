@@ -132,6 +132,7 @@ const clicker = process.platform === 'win32' && code.pid
 let clickerErrors = '';
 clicker?.stderr?.on('data', d => { clickerErrors += String(d); });
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const results: { name: string; ok: boolean; note: string }[] = [];
 let client: Client | undefined;
 
@@ -170,7 +171,7 @@ try {
 		return existsSync(logsDir) ? walk(logsDir) : '';
 	};
 	for (let i = 0; i < 180 && !/enabled is off/.test(bridgeLog()); i++) {
-		await new Promise(r => setTimeout(r, 500));
+		await sleep(500);
 	}
 	{
 		const h = runHook(workspace);
@@ -179,7 +180,7 @@ try {
 	results.push({ name: 'off while disabled', ok: /enabled is off/.test(bridgeLog()) && !existsSync(file), note: existsSync(file) ? 'discovery file exists while disabled' : 'logged "enabled is off", no discovery file' });
 	writeSettings(true);
 	for (let i = 0; i < 180 && !existsSync(file); i++) {
-		await new Promise(r => setTimeout(r, 500));
+		await sleep(500);
 	}
 	if (!existsSync(file)) {
 		throw new Error(`No discovery file at ${file} after 90 s`);
@@ -255,7 +256,7 @@ try {
 		// A 1×1 PNG; vscode.open shows it in the image preview, as a click in the explorer does.
 		writeFileSync(join(workspace, 'shot.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
 		await call('execute_command', { command: 'vscode.open', args: [{ $uri: 'shot.png' }] });
-		await new Promise(r => setTimeout(r, 2000));
+		await sleep(2000);
 		await expectText('visible_images sees the image preview', 'visible_images', {}, /shot\.png \(active\)/);
 		const h = runHook(workspace);
 		const context = hookContext(h.stdout) ?? '';
@@ -271,7 +272,7 @@ try {
 		const until = async (done: (t: string) => boolean, ms = 20_000): Promise<string> => {
 			let t = await selectionNow();
 			for (const end = Date.now() + ms; !done(t) && Date.now() < end; t = await selectionNow()) {
-				await new Promise(r => setTimeout(r, 500));
+				await sleep(500);
 			}
 			return t;
 		};
@@ -310,7 +311,7 @@ try {
 			(JSON.parse(textOf(await call('execute_command', { command: 'standin.received' }))) as { message?: Posted }[]).flatMap(m => m.message ? [m.message] : []);
 		const selectionPosts = async (done: (n: number) => boolean) => {
 			let posts: Posted[] = [];
-			for (const end = Date.now() + 20_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 20_000; Date.now() < end; await sleep(500)) {
 				posts = (await standinMessages()).filter(m => m.request?.type === 'selection_changed');
 				if (done(posts.length)) {
 					break;
@@ -319,7 +320,7 @@ try {
 			return posts;
 		};
 		await check('stand-in webview is live', async () => {
-			for (const end = Date.now() + 20_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 20_000; Date.now() < end; await sleep(500)) {
 				if ((await standinMessages()).some(m => m.request?.type === 'focus_input')) {
 					return true;
 				}
@@ -365,7 +366,7 @@ try {
 		] as const) {
 			await check(`chat link to ${file} opens through ${route}`, async () => {
 				const via = await openLink(file);
-				await new Promise(r => setTimeout(r, 1500));
+				await sleep(1500);
 				const t = await tab();
 				await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 				return via === route && t.kind === kind && (t.viewType ?? undefined) === viewType && t.uri?.endsWith(file.replace('/', '\\')) || `via ${via}, tab ${JSON.stringify(t)}`;
@@ -373,7 +374,7 @@ try {
 		}
 		await check('showTextDocument with a TextDocument is not rejected', async () => {
 			const result = textOf(await call('execute_command', { command: 'standin.showDocument', args: [{ $uri: 'notes.md' }] })).replace(/^"|"$/g, '');
-			await new Promise(r => setTimeout(r, 1500));
+			await sleep(1500);
 			const t = await tab();
 			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 			return result === 'shown' && t.kind === 'text' || `${result}, tab ${JSON.stringify(t)}`;
@@ -383,16 +384,16 @@ try {
 		const setSetting = async (key: string, value: boolean) => {
 			overrides[`vscodeToolsBridge.${key}`] = value;
 			writeSettings(true);
-			for (const end = Date.now() + 30_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
 				if (textOf(await call('execute_command', { command: 'standin.setting', args: [key] })) === String(value)) {
 					break;
 				}
 			}
-			await new Promise(r => setTimeout(r, 1000));
+			await sleep(1000);
 		};
 		const followLink = async (file: string) => {
 			const via = await openLink(file);
-			await new Promise(r => setTimeout(r, 1500));
+			await sleep(1500);
 			const t = await tab();
 			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 			return `${via}, ${t.kind}`;
@@ -412,13 +413,13 @@ try {
 			.filter(m => m.message?.request?.type === 'selection_changed').length;
 		const selectAllInMarkdownEditor = async () => {
 			await call('execute_command', { command: 'vscode.openWith', args: [{ $uri: 'notes.md' }, 'vscode.markdown.editor'] });
-			await new Promise(r => setTimeout(r, 3000));
+			await sleep(3000);
 			await call('execute_command', { command: 'markdown.editor.selectAll' });
-			await new Promise(r => setTimeout(r, 3000));
+			await sleep(3000);
 		};
 		await setSetting('markdownEditor.selection', false);
 		await call('execute_command', { command: 'standin.open' });
-		await new Promise(r => setTimeout(r, 3000));
+		await sleep(3000);
 		const postsBefore = await postsToClaude();
 		const cliBefore = (await cliSelections()).length;
 		await selectAllInMarkdownEditor();
@@ -439,7 +440,7 @@ try {
 		await call('execute_command', { command: 'standin.close' });
 		await setSetting('markdownEditor.selection', true);
 		await call('execute_command', { command: 'standin.open' }); // Its first post lets the bridge find it again.
-		await new Promise(r => setTimeout(r, 3000));
+		await sleep(3000);
 		await selectAllInMarkdownEditor();
 		await check('Markdown Editor selection on again: the tool and Claude Code get the selection', async () => {
 			const t = textOf(await call('markdown_editor_selection', {}));
@@ -453,7 +454,7 @@ try {
 		const openSettingsLink = (url: string) => spawnSync(exe, ['--open-url', url, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`], { env, timeout: 30_000 });
 		const activeLabel = async () => (await tab() as { label?: string }).label;
 		const waitForLabel = async (label: string) => {
-			for (const end = Date.now() + 15_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+			for (const end = Date.now() + 15_000; Date.now() < end; await sleep(500)) {
 				if (await activeLabel() === label) {
 					return true;
 				}
@@ -464,7 +465,7 @@ try {
 		results.push({ name: 'a setting link opens the Settings editor', ok: await waitForLabel('Settings'), note: `active tab: ${await activeLabel()}` });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=workbench.colorTheme');
-		await new Promise(r => setTimeout(r, 5000));
+		await sleep(5000);
 		results.push({ name: 'a link to another extension\'s setting is ignored', ok: await activeLabel() !== 'Settings' && /Ignored the link/.test(bridgeLog()), note: `active tab: ${await activeLabel()}` });
 	}
 
@@ -508,9 +509,9 @@ try {
 	// Terminal: run a command through the keyboard-input command, then read it back.
 	await check('terminal setup', async () => {
 		await call('execute_command', { command: 'workbench.action.terminal.new' });
-		await new Promise(r => setTimeout(r, 8000));
+		await sleep(8000);
 		await call('execute_command', { command: 'workbench.action.terminal.sendSequence', args: [{ text: 'echo bridge-marker-42\r' }] });
-		await new Promise(r => setTimeout(r, 4000));
+		await sleep(4000);
 		return true;
 	});
 	if (has('terminal_last_command')) {
@@ -600,14 +601,14 @@ try {
 					changes.push(`${Date.now() - started} ms: ${now ? 'shared' : 'not shared'}`);
 					last = now;
 				}
-				await new Promise(r => setTimeout(r, 300));
+				await sleep(300);
 			}
 			console.log(`
 ${label}: ${changes.join(', ')}`);
 			return !!last;
 		};
 		await call('execute_command', { command: 'workbench.action.browser.open', args: [userUrl] });
-		await new Promise(r => setTimeout(r, 3000));
+		await sleep(3000);
 		const before = runHook(workspace);
 		results.push({ name: 'prompt hook ignores an unshared page', ok: !(hookContext(before.stdout) ?? '').includes('shared-by-user'), note: `${before.ms} ms` });
 		const pressed = pressButton('Share with Agent');
