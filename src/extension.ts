@@ -26,6 +26,19 @@ let current: { server: NetServer; file: string; record: DiscoveryRecord } | unde
 export function activate(context: vscode.ExtensionContext): void {
 	log = vscode.window.createOutputChannel('VS Code Tools Bridge', { log: true });
 	context.subscriptions.push(log, { dispose: stop }, { dispose: () => syncPatches(true) });
+	// Opens the Settings editor at one of this extension's settings. The README links to it through vscode.dev/redirect, which adds a `url` parameter; only `id` counts.
+	let refusedLogged = false;
+	context.subscriptions.push(vscode.window.registerUriHandler({
+		handleUri(uri) {
+			const id = uri.path === '/settings' ? new URLSearchParams(uri.query).get('id') : null;
+			if (id !== null && /^vscodeToolsBridge\.[\w.]+$/.test(id)) {
+				void vscode.commands.executeCommand('workbench.action.openSettings', id);
+			} else if (!refusedLogged) {
+				refusedLogged = true;
+				log.warn(`Ignored the link ${uri.toString()}: it is not a vscodeToolsBridge setting.`);
+			}
+		},
+	}));
 	const restart = () => {
 		stop();
 		start().catch(err => log.error(`Bridge failed to start: ${err instanceof Error ? err.message : String(err)}`));

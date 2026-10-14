@@ -16,7 +16,8 @@
   },
   "activationEvents": [
     "onStartupFinished",
-    "onCustomEditor:vscode.markdown.editor"
+    "onCustomEditor:vscode.markdown.editor",
+    "onUri"
   ],
   "contributes": {
     "configuration": {

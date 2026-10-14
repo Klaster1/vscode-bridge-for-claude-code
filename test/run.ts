@@ -44,6 +44,7 @@ const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.str
 	'telemetry.telemetryLevel': 'off',
 	'workbench.startupEditor': 'none',
 	'workbench.editor.closeEmptyGroups': false, // The bridge's startup panel must leave no empty group behind.
+	'extensions.confirmedUriHandlerExtensionIds': ['local.vscode-tools-bridge'], // Skips the prompt that a link to an extension raises.
 	'workbench.editorAssociations': { '*.md': 'vscode.markdown.editor' },
 	'chat.agent.enabled': true,
 	'workbench.browser.enableChatTools': true,
@@ -402,6 +403,24 @@ try {
 		});
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		await call('execute_command', { command: 'standin.close' });
+
+		// The README's setting links reach the bridge as vscode:// links; --open-url hands one to this test instance only.
+		const openSettingsLink = (url: string) => spawnSync(exe, ['--open-url', url, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`], { env, timeout: 30_000 });
+		const activeLabel = async () => (await tab() as { label?: string }).label;
+		const waitForLabel = async (label: string) => {
+			for (const end = Date.now() + 15_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+				if (await activeLabel() === label) {
+					return true;
+				}
+			}
+			return false;
+		};
+		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.enabled&url=vscode%3A%2F%2Flocal.vscode-tools-bridge%2Fsettings%3Fid%3DvscodeToolsBridge.enabled');
+		results.push({ name: 'a setting link opens the Settings editor', ok: await waitForLabel('Settings'), note: `active tab: ${await activeLabel()}` });
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=workbench.colorTheme');
+		await new Promise(r => setTimeout(r, 5000));
+		results.push({ name: 'a link to another extension\'s setting is ignored', ok: await activeLabel() !== 'Settings' && /Ignored the link/.test(bridgeLog()), note: `active tab: ${await activeLabel()}` });
 	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.

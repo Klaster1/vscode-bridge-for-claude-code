@@ -45,7 +45,7 @@ exports.activate = context => {
 		vscode.commands.registerCommand('standin.activeTab', () => {
 			const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
 			const input = tab?.input;
-			return { kind: input instanceof vscode.TabInputText ? 'text' : input instanceof vscode.TabInputCustom ? 'custom' : 'other', viewType: input?.viewType, uri: input?.uri?.fsPath };
+			return { label: tab?.label, kind: input instanceof vscode.TabInputText ? 'text' : input instanceof vscode.TabInputCustom ? 'custom' : 'other', viewType: input?.viewType, uri: input?.uri?.fsPath };
 		}),
 	);
 };

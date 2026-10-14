@@ -44,12 +44,12 @@ A link to a line or a heading opens the file at the top.
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `vscodeToolsBridge.enabled` | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
-| `vscodeToolsBridge.executeCommand.allow` | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
-| `vscodeToolsBridge.executeCommand.deny` | `[]` | Command IDs it must never run. Deny wins over allow. |
-| `vscodeToolsBridge.autoApprove` | `true` | Skips the browser confirmation dialog. |
-| `vscodeToolsBridge.markdownEditor.selection` | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload. |
-| `vscodeToolsBridge.claudeCode.chatLinks` | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
+| [`vscodeToolsBridge.enabled`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.enabled) | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
+| [`vscodeToolsBridge.executeCommand.allow`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
+| [`vscodeToolsBridge.executeCommand.deny`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. |
+| [`vscodeToolsBridge.autoApprove`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
+| [`vscodeToolsBridge.markdownEditor.selection`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload. |
+| [`vscodeToolsBridge.claudeCode.chatLinks`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 
 To keep Claude from closing the window, for example:
 
@@ -115,7 +115,3 @@ it. `/mcp` lists `vscode-tools` as connected, and the **VS Code Tools Bridge** o
 logs each call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
 
 To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
-
-The bridge is on in every window with a local folder open.
-
-MIT licence. See [LICENSE](LICENSE).
