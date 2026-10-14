@@ -51,12 +51,12 @@ panel. `/ide` needs Claude Code's VS Code extension installed.
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| [`vscodeToolsBridge.enabled`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.enabled) | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
-| [`vscodeToolsBridge.executeCommand.allow`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
-| [`vscodeToolsBridge.executeCommand.deny`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. |
-| [`vscodeToolsBridge.autoApprove`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
-| [`vscodeToolsBridge.markdownEditor.selection`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload, except that the CLI needs a window reload after you turn it on. |
-| [`vscodeToolsBridge.claudeCode.chatLinks`](https://vscode.dev/redirect?url=vscode://local.vscode-tools-bridge/settings?id%3DvscodeToolsBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
+| [`vscodeToolsBridge.enabled`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.enabled) | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
+| [`vscodeToolsBridge.executeCommand.allow`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. |
+| [`vscodeToolsBridge.executeCommand.deny`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. |
+| [`vscodeToolsBridge.autoApprove`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
+| [`vscodeToolsBridge.markdownEditor.selection`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. A change takes effect without a reload, except that the CLI needs a window reload after you turn it on. |
+| [`vscodeToolsBridge.claudeCode.chatLinks`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 
 To keep Claude from closing the window, for example:
 
