@@ -3,7 +3,7 @@
 // so the config keeps one fixed path while the extension's own folder changes with each version.
 // Imports nothing from 'vscode', so setup.ts can use it too.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -44,6 +44,19 @@ ${guard}try {
 	${onFailure}
 }
 `;
+}
+
+/** Deletes both shims, and their folder when nothing else is in it. */
+export function removeShims(): void {
+	const dir = shimDir();
+	for (const name of Object.values(files)) {
+		rmSync(join(dir, name), { force: true });
+	}
+	try {
+		rmdirSync(dir);
+	} catch {
+		// Not empty: on Windows the discovery files of open windows are in it.
+	}
 }
 
 /** Writes both shims for the extension (or clone) at `root`, each only when its content changes. Returns the files it wrote. */

@@ -146,3 +146,9 @@ Start `claude` in the window's first workspace folder or a folder below it. `/mc
 call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
 
 ![vscode-tools connected in /mcp](docs/screenshots/mcp-connected.png)
+
+### Uninstall
+
+Uninstall the extension in the Extensions view, then restart VS Code. The restart removes what
+the extension added to Claude Code: the `vscode-tools` MCP server, the prompt hook, and the
+`launcher.mjs` and `prompt-hook.mjs` files. Entries that point at other files stay.

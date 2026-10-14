@@ -78,9 +78,10 @@
     ]
   },
   "scripts": {
+    "vscode:uninstall": "node ./uninstall.ts",
     "setup": "node setup.ts",
     "typecheck": "tsc -p .",
-    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/install-check.ts && node test/shell-check.ts && node test/shims-check.ts && node test/run.ts",
+    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/install-check.ts && node test/shell-check.ts && node test/shims-check.ts && node test/uninstall-check.ts && node test/run.ts",
     "package": "vsce package --allow-missing-repository --skip-license --no-rewrite-relative-links",
     "screenshots": "node scripts/generate-screenshots.ts",
     "check-screenshots": "node scripts/check-screenshots.ts"

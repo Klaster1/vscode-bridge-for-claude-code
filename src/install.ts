@@ -1,7 +1,7 @@
-// Connects Claude Code to the bridge: the vscode-tools MCP server and the prompt hook, both
-// pointing at the fixed shims. The Connect Claude Code command and `npm run setup` share it, so
-// both act the same way.
-// Imports nothing from 'vscode', so setup.ts can use it too.
+// Connects Claude Code to the bridge, and disconnects it: the vscode-tools MCP server and the
+// prompt hook, both pointing at the fixed shims. The Connect Claude Code command, `npm run setup`
+// and the uninstall script share it, so all three act the same way.
+// Imports nothing from 'vscode', so setup.ts and uninstall.ts can use it too.
 
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -73,6 +73,34 @@ export function addHook(file: string, command: string): void {
 	writeSettings(file, settings);
 }
 
+/** Takes out the hooks that run `hookPath`, and the arrays and objects that leaves empty. Throws when the file is not plain JSON. */
+export function removeHook(file: string, hookPath: string): void {
+	const settings = readSettings(file);
+	const entries = settings?.hooks?.UserPromptSubmit;
+	if (!settings?.hooks || !entries) {
+		return;
+	}
+	const ours = (command: string | undefined) => (command ?? '').toLowerCase().includes(hookPath.toLowerCase());
+	let changed = false;
+	const kept = entries.flatMap(entry => {
+		const rest = (entry.hooks ?? []).filter(h => !ours(h.command));
+		changed ||= rest.length !== (entry.hooks ?? []).length;
+		return rest.length === (entry.hooks ?? []).length ? [entry] : rest.length ? [{ ...entry, hooks: rest }] : [];
+	});
+	if (!changed) {
+		return;
+	}
+	if (kept.length) {
+		settings.hooks.UserPromptSubmit = kept;
+	} else {
+		delete settings.hooks.UserPromptSubmit;
+		if (!Object.keys(settings.hooks).length) {
+			delete settings.hooks;
+		}
+	}
+	writeSettings(file, settings);
+}
+
 /**
  * Registers the MCP server and adds the prompt hook. Leaves a registration that already runs
  * the shim alone. Replaces another one, and puts it back when the new one fails, so a working
@@ -103,4 +131,21 @@ export async function connectClaudeCode(shims: Shims, run: RunClaude = runClaude
 		failures.push(`Could not add the prompt hook (${err instanceof Error ? err.message : String(err)}). Add this entry to the "hooks.UserPromptSubmit" array in ${settingsFile()}: ${JSON.stringify({ hooks: [{ type: 'command', command: hookCommand, timeout: 5 }] })}`);
 	}
 	return failures;
+}
+
+/** Undoes connectClaudeCode: removes the hook and the registration only where they point at the shims. Returns what failed. */
+export async function disconnectClaudeCode(shims: Shims, run: RunClaude = runClaude): Promise<string[]> {
+	const problems: string[] = [];
+	try {
+		removeHook(settingsFile(), shims.hook);
+	} catch (err) {
+		problems.push(`Could not remove the prompt hook: ${err instanceof Error ? err.message : String(err)}`);
+	}
+	if (readRegistration()?.args?.includes(shims.launcher)) {
+		const removed = await run(['mcp', 'remove', '--scope', 'user', serverName]);
+		if (!removed.ok) {
+			problems.push(`Could not remove the MCP server (${removed.output || 'claude did not run'}).`);
+		}
+	}
+	return problems;
 }

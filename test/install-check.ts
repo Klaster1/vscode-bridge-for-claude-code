@@ -1,6 +1,6 @@
-// Offline check of src/install.ts, which `npm run setup` and the Connect Claude Code command share:
-// what it registers in a throwaway Claude Code config folder, with the `claude` calls recorded
-// instead of run.
+// Offline check of src/install.ts, which `npm run setup`, the Connect Claude Code command and the
+// uninstall script share: what it registers and removes in a throwaway Claude Code config folder,
+// with the `claude` calls recorded instead of run.
 //
 //   node test/install-check.ts
 
@@ -8,7 +8,7 @@ import { strict as assert } from 'node:assert';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { connectClaudeCode, serverName, settingsFile, type RunClaude } from '../src/install.ts';
+import { connectClaudeCode, disconnectClaudeCode, serverName, settingsFile, type RunClaude } from '../src/install.ts';
 import { check, finish } from './harness.ts';
 
 const temp = mkdtempSync(join(tmpdir(), 'ic-'));
@@ -94,6 +94,40 @@ await check('a settings file that is not JSON is reported with the entry to add 
 	const failures = await connectClaudeCode(shims, fakeClaude().run);
 	assert.equal(failures.length, 1);
 	assert.match(failures[0]!, /Could not add the prompt hook[\s\S]*prompt-hook\.mjs/);
+});
+
+await check('disconnecting removes the hook and the registration that point at the shims, and nothing else', async () => {
+	const dir = config({ servers: { [serverName]: stdio('node', shims.launcher) }, settings: { theme: 'dark', hooks: { UserPromptSubmit: [hookEntry(hookCommand), hookEntry('echo unrelated')], Stop: [hookEntry('echo done')] } } });
+	const claude = fakeClaude();
+	assert.deepEqual(await disconnectClaudeCode(shims, claude.run), []);
+	assert.equal(claude.subcommands(), 'remove');
+	assert.deepEqual(commandsIn(dir), ['echo unrelated']);
+	const saved = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as { theme: string; hooks: { Stop: unknown[] } };
+	assert.equal(saved.theme, 'dark');
+	assert.equal(saved.hooks.Stop.length, 1);
+});
+
+await check('disconnecting leaves another vscode-tools server and a settings file without our hook alone', async () => {
+	const settings = { hooks: { UserPromptSubmit: [hookEntry('echo unrelated')] } };
+	const dir = config({ servers: { [serverName]: stdio('node', '/somewhere/else.mjs') }, settings });
+	const before = readFileSync(join(dir, 'settings.json'), 'utf8');
+	const claude = fakeClaude();
+	assert.deepEqual(await disconnectClaudeCode(shims, claude.run), []);
+	assert.deepEqual(claude.calls, []);
+	assert.equal(readFileSync(join(dir, 'settings.json'), 'utf8'), before);
+});
+
+await check('disconnecting drops the hooks object that held only our hook', async () => {
+	const dir = config({ settings: { theme: 'dark', hooks: { UserPromptSubmit: [hookEntry(hookCommand)] } } });
+	assert.deepEqual(await disconnectClaudeCode(shims, fakeClaude().run), []);
+	assert.deepEqual(JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')), { theme: 'dark' });
+});
+
+await check('disconnecting with no config files does nothing', async () => {
+	config({});
+	const claude = fakeClaude();
+	assert.deepEqual(await disconnectClaudeCode(shims, claude.run), []);
+	assert.deepEqual(claude.calls, []);
 });
 
 rmSync(temp, { recursive: true, force: true });
