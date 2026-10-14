@@ -106,11 +106,6 @@ function syncPatches(removeAll = false): void {
 	}
 }
 
-export function deactivate(): void {
-	syncPatches(true);
-	bridge.stop();
-}
-
 async function start(): Promise<void> {
 	if (!vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)) {
 		log.info('vscodeToolsBridge.enabled is off; bridge not started.');
