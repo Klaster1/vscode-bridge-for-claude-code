@@ -146,7 +146,7 @@ try {
 	const logsDir = join(run, 'user-data', 'logs');
 	const bridgeLog = (): string => {
 		const walk = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map(e =>
-			e.isDirectory() ? walk(join(dir, e.name)) : e.name === 'VS Code Tools Bridge.log' ? readFileSync(join(dir, e.name), 'utf8') : '').join('');
+			e.isDirectory() ? walk(join(dir, e.name)) : e.name === 'VS Code Bridge for Claude Code.log' ? readFileSync(join(dir, e.name), 'utf8') : '').join('');
 		return existsSync(logsDir) ? walk(logsDir) : '';
 	};
 	for (let i = 0; i < 180 && !/enabled is off/.test(bridgeLog()); i++) {

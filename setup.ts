@@ -55,6 +55,6 @@ manual.push(
 		+ indent(JSON.stringify(hookEntry, null, 2)),
 	'Let Claude use the browser without confirmation dialogs. Run Preferences: Configure Runtime Arguments in VS Code, add this line to argv.json and restart VS Code:\n\n'
 		+ indent(`"enable-proposed-api": ["${extensionId}"]`),
-	'Start a new Claude Code session in the workspace\'s first folder. /mcp lists vscode-tools as connected, and the "VS Code Tools Bridge" output channel in VS Code logs each call.',
+	'Start a new Claude Code session in the workspace\'s first folder. /mcp lists vscode-tools as connected, and the "VS Code Bridge for Claude Code" output channel in VS Code logs each call.',
 );
 console.log(`\nWhat is left to do by hand:\n\n${manual.map((step, i) => `${i + 1}. ${step}`).join('\n\n')}\n`);

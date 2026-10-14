@@ -1,4 +1,4 @@
-# VS Code Tools Bridge
+# VS Code Bridge for Claude Code
 
 A VS Code extension that gives Claude Code (the CLI) the tools and the screen of the VS Code window it works in.
 
@@ -111,7 +111,7 @@ By hand:
    ```
 
 To check the install, start `claude` in the window's first workspace folder or a folder below
-it. `/mcp` lists `vscode-tools` as connected, and the **VS Code Tools Bridge** output channel
+it. `/mcp` lists `vscode-tools` as connected, and the **VS Code Bridge for Claude Code** output channel
 logs each call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
 
 To update, run `git pull` and `npm run setup`, then reload the VS Code windows.

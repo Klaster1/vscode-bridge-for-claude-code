@@ -24,7 +24,7 @@ const patches = new Map<string, vscode.Disposable>();
 let current: { server: NetServer; file: string; record: DiscoveryRecord } | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
-	log = vscode.window.createOutputChannel('VS Code Tools Bridge', { log: true });
+	log = vscode.window.createOutputChannel('VS Code Bridge for Claude Code', { log: true });
 	context.subscriptions.push(log, { dispose: stop }, { dispose: () => syncPatches(true) });
 	// Opens the Settings editor at one of this extension's settings. The README links to it through vscode.dev/redirect, which adds a `url` parameter; only `id` counts.
 	let refusedLogged = false;

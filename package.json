@@ -1,6 +1,6 @@
 {
   "name": "vscode-tools-bridge",
-  "displayName": "VS Code Tools Bridge",
+  "displayName": "VS Code Bridge for Claude Code",
   "description": "Publishes selected VS Code and Copilot agent tools to Claude Code over MCP, through a per-window named pipe.",
   "publisher": "local",
   "version": "0.0.1",
@@ -21,7 +21,7 @@
   ],
   "contributes": {
     "configuration": {
-      "title": "VS Code Tools Bridge",
+      "title": "VS Code Bridge for Claude Code",
       "properties": {
         "vscodeToolsBridge.enabled": {
           "type": "boolean",

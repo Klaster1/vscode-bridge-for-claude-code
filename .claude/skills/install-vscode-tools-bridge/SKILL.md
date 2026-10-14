@@ -1,9 +1,9 @@
 ---
 name: install-vscode-tools-bridge
-description: Use when the user asks to install, set up, update or reinstall the VS Code Tools Bridge from this clone, after a `git pull`, or to check that the bridge works ("is vscode-tools connected", "the bridge tools are missing"). Runs the setup script, makes the settings edits it only prints, each with the user's consent, and checks the result.
+description: Use when the user asks to install, set up, update or reinstall the VS Code Bridge for Claude Code from this clone, after a `git pull`, or to check that the bridge works ("is vscode-tools connected", "the bridge tools are missing"). Runs the setup script, makes the settings edits it only prints, each with the user's consent, and checks the result.
 ---
 
-# Install or update the VS Code Tools Bridge
+# Install or update the VS Code Bridge for Claude Code
 
 The bridge has three parts: a VS Code extension, the `vscode-tools` MCP server that Claude
 Code starts (`launcher.ts`), and a prompt hook (`prompt-hook.ts`). `npm run setup`
@@ -69,10 +69,10 @@ moved, replace the hook entry with the one the script prints.
 2. Call the `list_workspaces` tool. Its `bridge.loadedFrom` path is in VS Code's extensions
    folder, under `local.vscode-tools-bridge-<version>`, with the version from
    `package.json`. Any other path means VS Code runs another copy of the extension.
-3. Ask the user to open the **VS Code Tools Bridge** output channel (**View: Toggle Output**,
+3. Ask the user to open the **VS Code Bridge for Claude Code** output channel (**View: Toggle Output**,
    then pick the channel). It shows `Listening on <pipe> for <folder>`, and one line per
    tool call. The same log is on disk, in the newest session folder under VS Code's
-   `logs` folder: `window<N>/exthost/local.vscode-tools-bridge/VS Code Tools Bridge.log`.
+   `logs` folder: `window<N>/exthost/local.vscode-tools-bridge/VS Code Bridge for Claude Code.log`.
 4. To check the hook, run `echo '{"cwd":"<the workspace folder>"}' | node prompt-hook.ts`.
    It exits with 0. It prints JSON only while a page is shared, an image is in front in an
    editor group or text is selected in a Markdown Editor; otherwise it prints nothing.
