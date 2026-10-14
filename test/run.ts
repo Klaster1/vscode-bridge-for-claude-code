@@ -248,6 +248,9 @@ try {
 	await expectText('rename_symbol', 'rename_symbol', { path: 'src/greet.ts', line: 1, symbol: 'oldName', newName: 'newGreeting' }, /2 file\(s\)/, 60_000);
 	await check('rename reached disk', async () => readFileSync(join(workspace, 'src', 'use.ts'), 'utf8').includes('newGreeting(') || 'use.ts not updated');
 	await expectText('execute_command returns serialised objects', 'execute_command', { command: 'vscode.executeDocumentSymbolProvider', args: [{ $uri: 'src/greet.ts' }] }, /newGreeting[\s\S]*"line"/);
+	// Each of these types keeps its data in private fields or getters, so the JSON of an unhandled one is {}.
+	await expectText('execute_command returns the text of a hover', 'execute_command', { command: 'vscode.executeHoverProvider', args: [{ $uri: 'src/use.ts' }, { $position: { line: 2, character: 14 } }] }, /const message: string/);
+	await expectText('execute_command returns the edits of a rename', 'execute_command', { command: 'vscode.executeDocumentRenameProvider', args: [{ $uri: 'src/greet.ts' }, { $position: { line: 0, character: 18 } }, 'renamedAgain'] }, /"newText": "renamedAgain"/);
 	await check('execute_command deny list', async () => {
 		const r = await call('execute_command', { command: 'workbench.action.quit' });
 		return r.isError && /blocked/.test(textOf(r)) ? true : textOf(r);

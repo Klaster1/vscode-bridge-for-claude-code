@@ -89,9 +89,9 @@ const MAX_ITEMS = 1_000;
 
 /**
  * JSON for any command return value. VS Code objects (Uri, Position, Range,
- * Location) become plain shapes, cycles and functions become markers, and
- * the output is capped at 100k characters, since a command can return a
- * whole document model.
+ * Location, MarkdownString, TextEdit, WorkspaceEdit) become plain shapes, cycles
+ * and functions become markers, and the output is capped at 100k characters,
+ * since a command can return a whole document model.
  */
 export function safeStringify(value: unknown): string {
 	const seen = new WeakSet<object>();
@@ -122,6 +122,16 @@ export function safeStringify(value: unknown): string {
 		}
 		if (v instanceof vscode.Location) {
 			return { uri: walk(v.uri, depth), range: walk(v.range, depth) };
+		}
+		// These keep their data in private fields or getters, so the generic walk below would return {}.
+		if (v instanceof vscode.MarkdownString) {
+			return { value: v.value };
+		}
+		if (v instanceof vscode.TextEdit) {
+			return { range: walk(v.range, depth), newText: v.newText };
+		}
+		if (v instanceof vscode.WorkspaceEdit) {
+			return v.entries().map(([uri, edits]) => ({ uri: walk(uri, depth), edits: walk(edits, depth) })); // Text edits only: the API shows no file operations.
 		}
 		if (v instanceof Uint8Array) {
 			return `[${v.byteLength} bytes]`;

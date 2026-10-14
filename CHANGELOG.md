@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0] - 2026-10-14
+
+### Fixed
+
+- `execute_command` returns hover text, and the edits of renames, formats and code actions.
+
 ## [0.3.0] - 2026-10-14
 
 ### Added

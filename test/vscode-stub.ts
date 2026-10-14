@@ -11,6 +11,9 @@ export class Position {
 }
 export class Range {}
 export class Location {}
+export class MarkdownString {}
+export class TextEdit {}
+export class WorkspaceEdit {}
 export class LanguageModelTextPart {
 	value: string;
 	constructor(value: string) {
