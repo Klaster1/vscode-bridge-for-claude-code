@@ -28,6 +28,18 @@
           "scope": "window",
           "markdownDescription": "Serve this window's tools to Claude Code. Turn it off in the settings of a workspace that should not serve them."
         },
+        "vscodeToolsBridge.markdownEditor.selection": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Report the text selected in the Markdown Editor: to Claude Code's selection chip, through the `markdown_editor_selection` tool and in the prompt hook's note. Works only while `#vscodeToolsBridge.enabled#` is on. A Markdown Editor that is open when you turn this on reports its selection after you reopen it."
+        },
+        "vscodeToolsBridge.claudeCode.chatLinks": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Open the file links in Claude Code's chat in the editor that VS Code picks for the file, such as the Markdown Editor for `.md`. Works only while `#vscodeToolsBridge.enabled#` is on."
+        },
         "vscodeToolsBridge.autoApprove": {
           "type": "boolean",
           "default": false,

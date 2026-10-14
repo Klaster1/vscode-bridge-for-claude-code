@@ -78,6 +78,7 @@ const claudeWebviews = new Set<vscode.Webview>();
 let chip: { editor: Editor; offsets: string } | undefined;
 let postToWebview: ((webview: vscode.Webview, message: unknown) => Thenable<boolean>) | undefined;
 let clock = 0;
+let running = false;
 let report: (message: string) => void = () => undefined;
 
 function reportOnce(key: string, message: string): void {
@@ -300,6 +301,7 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 		},
 	};
 	Object.defineProperty(owner, 'html', patched);
+	running = true;
 
 	const post = findOwner(prototype, 'postMessage');
 	const originalPost = post?.descriptor.value as ((this: vscode.Webview, message: unknown) => Thenable<boolean>) | undefined;
@@ -352,6 +354,7 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 	return {
 		dispose() {
 			active = false;
+			running = false;
 			disposables.forEach(d => d.dispose());
 			for (const editor of [...editors.values()]) {
 				forget(editor);
@@ -369,6 +372,9 @@ export function installMarkdownSelection(log: (message: string) => void): vscode
 		},
 	};
 }
+
+/** Whether the patch is installed; without it no selection is read. */
+export const markdownSelectionRunning = (): boolean => running;
 
 /** The Markdown Editor in front of each editor group, with its selection. */
 export async function markdownEditorSelections(): Promise<MarkdownEditorState[]> {

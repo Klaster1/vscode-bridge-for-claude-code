@@ -20,29 +20,31 @@ import { installMarkdownSelection } from './markdownSelection.ts';
 import { allTools } from './tools.ts';
 
 let log: vscode.LogOutputChannel;
-let patches: vscode.Disposable[] | undefined;
+const patches = new Map<string, vscode.Disposable>();
 let current: { server: NetServer; file: string; record: DiscoveryRecord } | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
 	log = vscode.window.createOutputChannel('VS Code Tools Bridge', { log: true });
-	context.subscriptions.push(log, { dispose: stop }, { dispose: () => syncPatches(false) });
+	context.subscriptions.push(log, { dispose: stop }, { dispose: () => syncPatches(true) });
 	const restart = () => {
 		stop();
 		start().catch(err => log.error(`Bridge failed to start: ${err instanceof Error ? err.message : String(err)}`));
 	};
-	// Install the patch before returning, so a Markdown Editor opened right after activation is covered.
-	syncPatches(isEnabled());
+	// Install the patches before returning, so a Markdown Editor opened right after activation is covered.
+	syncPatches();
 	restart();
 	// The pipe is keyed on the first folder, so re-key when the folders change.
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {
-			syncPatches(isEnabled());
+			syncPatches();
 			restart();
 		}),
 		vscode.workspace.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration('vscodeToolsBridge.enabled')) {
-				syncPatches(isEnabled());
+				syncPatches();
 				restart();
+			} else if (patchSettings.some(([setting]) => e.affectsConfiguration(`vscodeToolsBridge.${setting}`))) {
+				syncPatches();
 			}
 		}),
 	);
@@ -51,26 +53,34 @@ export function activate(context: vscode.ExtensionContext): void {
 const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('enabled', true)
 	&& vscode.workspace.workspaceFolders?.[0]?.uri.scheme === 'file';
 
-/** Installs or removes the runtime patches: the Markdown Editor selection and the chat links. */
-function syncPatches(wanted: boolean): void {
-	if (wanted && !patches) {
-		const report = (message: string) => log.info(message);
-		patches = [installMarkdownSelection, installChatLinks].flatMap(install => {
+/** The runtime patches, each switched by its own setting. */
+const patchSettings: [setting: string, install: (report: (message: string) => void) => vscode.Disposable][] = [
+	['markdownEditor.selection', installMarkdownSelection],
+	['claudeCode.chatLinks', installChatLinks],
+];
+
+/** Installs or removes each patch to match its setting; `removeAll` removes them regardless. */
+function syncPatches(removeAll = false): void {
+	const config = vscode.workspace.getConfiguration('vscodeToolsBridge');
+	const enabled = !removeAll && isEnabled();
+	for (const [setting, install] of patchSettings) {
+		const wanted = enabled && config.get<boolean>(setting, true);
+		const installed = patches.get(setting);
+		if (wanted && !installed) {
 			try {
-				return [install(report)];
+				patches.set(setting, install(message => log.info(message)));
 			} catch (err) {
-				log.error(`A runtime patch failed to install: ${err instanceof Error ? err.message : String(err)}`);
-				return [];
+				log.error(`The ${setting} patch failed to install: ${err instanceof Error ? err.message : String(err)}`);
 			}
-		});
-	} else if (!wanted && patches) {
-		patches.forEach(p => p.dispose());
-		patches = undefined;
+		} else if (!wanted && installed) {
+			installed.dispose();
+			patches.delete(setting);
+		}
 	}
 }
 
 export function deactivate(): void {
-	syncPatches(false);
+	syncPatches(true);
 	stop();
 }
 

@@ -14,7 +14,8 @@
     "onCommand:standin.openLink",
     "onCommand:standin.showDocument",
     "onCommand:standin.activeTab",
-    "onCommand:standin.groupCount"
+    "onCommand:standin.groupCount",
+    "onCommand:standin.setting"
   ],
   "contributes": {
     "commands": [
@@ -45,6 +46,10 @@
       {
         "command": "standin.groupCount",
         "title": "Stand-in: count the editor groups"
+      },
+      {
+        "command": "standin.setting",
+        "title": "Stand-in: read a bridge setting"
       }
     ]
   }

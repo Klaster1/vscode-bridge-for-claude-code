@@ -36,6 +36,8 @@ mkdirSync(join(run, 'extensions'), { recursive: true });
 cpSync(join(root, 'test', 'fixture'), workspace, { recursive: true });
 const autoApprove = !!process.env['BRIDGE_TEST_AUTO_APPROVE'];
 const settingsFile = join(run, 'user-data', 'User', 'settings.json');
+// Settings a check turns on or off while the window runs.
+const overrides: Record<string, unknown> = {};
 const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.stringify({
 	'security.workspace.trust.enabled': false,
 	'update.mode': 'none',
@@ -48,6 +50,7 @@ const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.str
 	'vscodeToolsBridge.executeCommand.deny': ['workbench.action.quit'],
 	'vscodeToolsBridge.enabled': enabled,
 	'vscodeToolsBridge.autoApprove': autoApprove,
+	...overrides,
 }, null, 2));
 // Start disabled, to check the bridge stays off until the setting is turned on.
 writeSettings(false);
@@ -331,6 +334,74 @@ try {
 			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 			return result === 'shown' && t.kind === 'text' || `${result}, tab ${JSON.stringify(t)}`;
 		});
+
+		// Each patch has its own setting, which takes effect without a reload.
+		const setSetting = async (key: string, value: boolean) => {
+			overrides[`vscodeToolsBridge.${key}`] = value;
+			writeSettings(true);
+			for (const end = Date.now() + 30_000; Date.now() < end; await new Promise(r => setTimeout(r, 500))) {
+				if (textOf(await call('execute_command', { command: 'standin.setting', args: [key] })) === String(value)) {
+					break;
+				}
+			}
+			await new Promise(r => setTimeout(r, 1000));
+		};
+		const followLink = async (file: string) => {
+			const via = await openLink(file);
+			await new Promise(r => setTimeout(r, 1500));
+			const t = await tab();
+			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+			return `${via}, ${t.kind}`;
+		};
+		await setSetting('claudeCode.chatLinks', false);
+		await check('chat links off: a link to the .md opens as text', async () => {
+			const opened = await followLink('notes.md');
+			return opened === 'showTextDocument, text' || opened;
+		});
+		await setSetting('claudeCode.chatLinks', true);
+		await check('chat links on again: the link opens in the Markdown Editor', async () => {
+			const opened = await followLink('notes.md');
+			return opened === 'vscode.open, custom' || opened;
+		});
+
+		const postsToClaude = async () => (JSON.parse(textOf(await call('execute_command', { command: 'standin.received' }))) as { message?: { request?: { type?: string } } }[])
+			.filter(m => m.message?.request?.type === 'selection_changed').length;
+		const selectAllInMarkdownEditor = async () => {
+			await call('execute_command', { command: 'vscode.openWith', args: [{ $uri: 'notes.md' }, 'vscode.markdown.editor'] });
+			await new Promise(r => setTimeout(r, 3000));
+			await call('execute_command', { command: 'markdown.editor.selectAll' });
+			await new Promise(r => setTimeout(r, 3000));
+		};
+		await setSetting('markdownEditor.selection', false);
+		await call('execute_command', { command: 'standin.open' });
+		await new Promise(r => setTimeout(r, 3000));
+		const postsBefore = await postsToClaude();
+		await selectAllInMarkdownEditor();
+		await check('Markdown Editor selection off: the tool reads nothing', async () => {
+			const t = textOf(await call('markdown_editor_selection', {}));
+			return /not being read/.test(t) || t.slice(0, 300);
+		});
+		await check('Markdown Editor selection off: nothing reaches Claude Code', async () => {
+			const after = await postsToClaude();
+			return after === postsBefore || `${postsBefore} -> ${after} posts`;
+		});
+		{
+			const h = runHook(workspace);
+			results.push({ name: 'Markdown Editor selection off: the prompt hook adds nothing', ok: h.status === 0 && !(hookContext(h.stdout) ?? '').includes('Markdown Editor'), note: `${h.ms} ms` });
+		}
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		await call('execute_command', { command: 'standin.close' });
+		await setSetting('markdownEditor.selection', true);
+		await call('execute_command', { command: 'standin.open' }); // Its first post lets the bridge find it again.
+		await new Promise(r => setTimeout(r, 3000));
+		await selectAllInMarkdownEditor();
+		await check('Markdown Editor selection on again: the tool and Claude Code get the selection', async () => {
+			const t = textOf(await call('markdown_editor_selection', {}));
+			const after = await postsToClaude();
+			return /lines 1-\d+, shown in Claude Code's selection chip, selected text:/.test(t) && after > postsBefore || `${t.slice(0, 200)}; ${postsBefore} -> ${after} posts`;
+		});
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		await call('execute_command', { command: 'standin.close' });
 	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.

@@ -4,7 +4,7 @@
 
 import * as vscode from 'vscode';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
-import { markdownEditorSelections } from './markdownSelection.ts';
+import { markdownEditorSelections, markdownSelectionRunning } from './markdownSelection.ts';
 import { safeStringify, toolResultToContent } from './render.ts';
 
 type Args = Record<string, unknown>;
@@ -519,6 +519,9 @@ const markdownEditorSelectionTool: BridgeTool = {
 		},
 	},
 	async call(args) {
+		if (!markdownSelectionRunning()) {
+			return text('The Markdown Editor selection is not being read: vscodeToolsBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the editor.');
+		}
 		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
 		const entries: string[] = [];
 		for (const { uri, active, selection, delivered } of await markdownEditorSelections()) {
