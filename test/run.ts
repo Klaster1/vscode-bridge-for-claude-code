@@ -1,4 +1,5 @@
-// End-to-end check in an isolated VS Code: downloads VS Code 1.138.0 into
+// End-to-end check in an isolated VS Code, on Windows only: it needs test/window-helper.ps1,
+// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.138.0 into
 // .vscode-test/, starts it with its own user-data and extensions folders and
 // this extension loaded from source, then talks to the bridge through
 // launcher.ts exactly as Claude Code would (stdio MCP, cwd = workspace root), through
@@ -26,6 +27,11 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryFile, type DiscoveryRecord } from '../src/discovery.ts';
 import { commandLine } from '../src/shell.ts';
 import { shimPaths, writeShims } from '../src/shims.ts';
+
+if (process.platform !== 'win32') {
+	console.error('test/run.ts runs on Windows only. It starts VS Code windows and answers their dialogs with test/window-helper.ps1, which uses Win32 and UI Automation. CI runs it on Windows.');
+	process.exit(1);
+}
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = join(root, '.vscode-test', 'run');
