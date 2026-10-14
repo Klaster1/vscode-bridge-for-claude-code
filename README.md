@@ -89,9 +89,8 @@ Notes:
   its first message.
 - Unlike Claude Code for a text editor, the extension does not check the file
   against `.gitignore` and the exclude settings before it sends the text.
-
-- At startup, the extension opens a webview panel beside the active editor and
-  closes it at once, to reach the shared setter.
+- At startup, the extension opens a webview panel in the active editor group and
+  closes it at once, to reach the shared setter. It creates no editor group.
 - The patch is removed when the bridge stops or the setting turns off. A Markdown
   Editor that was open at that time is read again only after you reopen it.
 - A Markdown Editor that VS Code restores at startup can open before the bridge
@@ -101,6 +100,30 @@ Notes:
   reads no selection. The Markdown Editor itself keeps working.
 - Two editors that show the same file report the selection of the one that
   opened last.
+
+### Chat links
+
+A file link in Claude Code's chat opens in the editor that your
+`workbench.editorAssociations` setting or a custom editor chooses, such as the
+Markdown Editor for `.md` files ([anthropics/claude-code#81482](https://github.com/anthropics/claude-code/issues/81482)).
+Claude Code opens a link with `window.showTextDocument`, which always uses the
+text editor. The extension wraps that function on the `vscode` API object that
+Claude Code holds. For a file that should open in another editor, the wrapper
+rejects the call, and Claude Code then falls back to its `vscode.open` command,
+which follows your associations. A file opens in another editor when an
+association other than `default` matches it (the longest matching pattern wins),
+or when an installed extension contributes a custom editor with priority
+`default` for it, such as a PDF viewer. All other calls pass through unchanged.
+
+- A link with a line range, a search text or a heading opens the file without
+  scrolling to it, because Claude Code reveals the position only in a text
+  editor.
+- This depends on Claude Code's internals, and it can break when Claude Code
+  updates. If the extension cannot find Claude Code or a replaceable function,
+  it logs that once in the **VS Code Tools Bridge** output channel and links
+  open as before.
+- Like the Markdown Editor patch, it applies only while `vscodeToolsBridge.enabled`
+  is on and a local folder is open.
 
 ### Shared pages, images and selections in every prompt
 

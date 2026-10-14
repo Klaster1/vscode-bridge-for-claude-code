@@ -41,6 +41,8 @@ const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.str
 	'update.mode': 'none',
 	'telemetry.telemetryLevel': 'off',
 	'workbench.startupEditor': 'none',
+	'workbench.editor.closeEmptyGroups': false, // The bridge's startup panel must leave no empty group behind.
+	'workbench.editorAssociations': { '*.md': 'vscode.markdown.editor' },
 	'chat.agent.enabled': true,
 	'workbench.browser.enableChatTools': true,
 	'vscodeToolsBridge.executeCommand.deny': ['workbench.action.quit'],
@@ -76,6 +78,7 @@ if (vsix) {
 }
 const code = spawn(exe, [
 	workspace,
+	join(workspace, 'src', 'greet.ts'), // An open editor, as after a reload: a panel opened beside it would add a group.
 	...(vsix ? [] : [`--extensionDevelopmentPath=${root}`]),
 	`--extensionDevelopmentPath=${join(root, 'test', 'standin')}`, // Plays Claude Code's chat webview.
 	`--user-data-dir=${join(run, 'user-data')}`,
@@ -195,6 +198,10 @@ try {
 		});
 	};
 	const has = (n: string) => tools.some(t => t.name === n);
+	await check('the bridge starts with the layout it found', async () => {
+		const groups = textOf(await call('execute_command', { command: 'standin.groupCount' }));
+		return groups === '1' || `${groups} editor groups`;
+	});
 
 	await expectText('list_workspaces', 'list_workspaces', {}, /"folders"[\s\S]*workspace/);
 	await expectText('get_diagnostics finds the type error', 'get_diagnostics', { paths: ['src/broken.ts'], minSeverity: 'error', waitMs: 20_000 }, /broken\.ts:1:\d+ error \[ts/, 60_000);
@@ -298,6 +305,32 @@ try {
 		await call('execute_command', { command: 'standin.close' });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		await expectText('markdown_editor_selection, editor closed', 'markdown_editor_selection', {}, /No Markdown Editor is in front/);
+	}
+
+	{
+		// Chat links. Claude Code (here the stand-in) opens a link with showTextDocument(uri) and falls back to
+		// vscode.open only when that rejects; the bridge makes it reject for a file that opens in a custom editor.
+		const tab = async () => JSON.parse(textOf(await call('execute_command', { command: 'standin.activeTab' }))) as { kind: string; viewType?: string; uri?: string };
+		const openLink = async (file: string) => textOf(await call('execute_command', { command: 'standin.openLink', args: [{ $uri: file }] })).replace(/^"|"$/g, '');
+		for (const [file, route, kind, viewType] of [
+			['notes.md', 'vscode.open', 'custom', 'vscode.markdown.editor'],
+			['src/use.ts', 'showTextDocument', 'text', undefined],
+		] as const) {
+			await check(`chat link to ${file} opens through ${route}`, async () => {
+				const via = await openLink(file);
+				await new Promise(r => setTimeout(r, 1500));
+				const t = await tab();
+				await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+				return via === route && t.kind === kind && (t.viewType ?? undefined) === viewType && t.uri?.endsWith(file.replace('/', '\\')) || `via ${via}, tab ${JSON.stringify(t)}`;
+			});
+		}
+		await check('showTextDocument with a TextDocument is not rejected', async () => {
+			const result = textOf(await call('execute_command', { command: 'standin.showDocument', args: [{ $uri: 'notes.md' }] })).replace(/^"|"$/g, '');
+			await new Promise(r => setTimeout(r, 1500));
+			const t = await tab();
+			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+			return result === 'shown' && t.kind === 'text' || `${result}, tab ${JSON.stringify(t)}`;
+		});
 	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.

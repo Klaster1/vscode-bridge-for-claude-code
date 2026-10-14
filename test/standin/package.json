@@ -1,20 +1,51 @@
 {
-  "name": "claude-code-standin",
-  "publisher": "local",
+  "name": "claude-code",
+  "publisher": "anthropic",
   "version": "0.0.0",
   "private": true,
-  "engines": { "vscode": "^1.138.0" },
+  "engines": {
+    "vscode": "^1.138.0"
+  },
   "main": "./extension.js",
   "activationEvents": [
     "onCommand:standin.open",
     "onCommand:standin.received",
-    "onCommand:standin.close"
+    "onCommand:standin.close",
+    "onCommand:standin.openLink",
+    "onCommand:standin.showDocument",
+    "onCommand:standin.activeTab",
+    "onCommand:standin.groupCount"
   ],
   "contributes": {
     "commands": [
-      { "command": "standin.open", "title": "Stand-in: open the chat webview" },
-      { "command": "standin.received", "title": "Stand-in: list the messages the page received" },
-      { "command": "standin.close", "title": "Stand-in: close the chat webview" }
+      {
+        "command": "standin.open",
+        "title": "Stand-in: open the chat webview"
+      },
+      {
+        "command": "standin.received",
+        "title": "Stand-in: list the messages the page received"
+      },
+      {
+        "command": "standin.close",
+        "title": "Stand-in: close the chat webview"
+      },
+      {
+        "command": "standin.openLink",
+        "title": "Stand-in: open a chat link as Claude Code does"
+      },
+      {
+        "command": "standin.showDocument",
+        "title": "Stand-in: showTextDocument with a TextDocument"
+      },
+      {
+        "command": "standin.activeTab",
+        "title": "Stand-in: describe the active tab"
+      },
+      {
+        "command": "standin.groupCount",
+        "title": "Stand-in: count the editor groups"
+      }
     ]
   }
 }

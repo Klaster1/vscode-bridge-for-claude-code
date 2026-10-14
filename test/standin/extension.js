@@ -1,7 +1,8 @@
-// Test-only stand-in for the Claude Code extension's chat webview, which the
-// end-to-end test cannot install. Like Claude Code, it posts
-// { type: 'from-extension', message: { type, ... } } to a webview, and its page
-// reports every message it receives.
+// Test-only stand-in for the Claude Code extension, which the end-to-end test
+// cannot install. It has Claude Code's extension ID. Like Claude Code, it posts
+// { type: 'from-extension', message: { type, ... } } to a webview whose page
+// reports every message it receives, and it opens file links with
+// window.showTextDocument(uri) and a vscode.open fallback.
 const vscode = require('vscode');
 
 const received = [];
@@ -23,5 +24,27 @@ exports.activate = context => {
 		}),
 		vscode.commands.registerCommand('standin.received', () => received),
 		vscode.commands.registerCommand('standin.close', () => panel?.dispose()),
+		// Claude Code's chat-link handler, reduced to the calls that matter; resolves with the path that opened the file.
+		vscode.commands.registerCommand('standin.openLink', uri => new Promise(resolve => {
+			const options = { preview: false };
+			vscode.window.showTextDocument(uri, options).then(
+				() => resolve('showTextDocument'),
+				() => vscode.commands.executeCommand('vscode.open', uri, options).then(() => resolve('vscode.open'), err => resolve(`failed: ${err}`)));
+		})),
+		// Claude Code's other calls pass a TextDocument.
+		vscode.commands.registerCommand('standin.showDocument', async uri => {
+			try {
+				await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { preview: false });
+				return 'shown';
+			} catch (err) {
+				return `rejected: ${err}`;
+			}
+		}),
+		vscode.commands.registerCommand('standin.groupCount', () => vscode.window.tabGroups.all.length),
+		vscode.commands.registerCommand('standin.activeTab', () => {
+			const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+			const input = tab?.input;
+			return { kind: input instanceof vscode.TabInputText ? 'text' : input instanceof vscode.TabInputCustom ? 'custom' : 'other', viewType: input?.viewType, uri: input?.uri?.fsPath };
+		}),
 	);
 };

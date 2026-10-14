@@ -57,7 +57,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node test/render-check.ts && node test/run.ts",
+    "test": "node test/render-check.ts && node test/glob-check.ts && node test/run.ts",
     "package": "vsce package --allow-missing-repository --skip-license"
   },
   "dependencies": {
