@@ -83,6 +83,7 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
   env -u ELECTRON_RUN_AS_NODE -u VSCODE_IPC_HOOK_CLI -u VSCODE_PID -u VSCODE_CWD -u VSCODE_NLS_CONFIG -u VSCODE_HANDLES_UNCAUGHT_ERRORS -u VSCODE_ESM_ENTRYPOINT -u VSCODE_CODE_CACHE_PATH -u VSCODE_CRASH_REPORTER_PROCESS_TYPE npm test
   ```
 
+- The **Connect Claude Code** check runs `claude mcp add`, so the `claude` CLI must be on `PATH`.
 - `BRIDGE_TEST_VSIX=<path>` tests a built VSIX instead of the source. The header of
   `test/run.ts` lists the other variables.
 - The "toolbar Share with Agent button found" check runs on Windows only, and it is known to

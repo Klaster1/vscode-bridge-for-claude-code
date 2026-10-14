@@ -33,6 +33,9 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+
+      - name: Install the Claude Code CLI
+        run: npm install --global @anthropic-ai/claude-code # The Connect Claude Code check runs `claude mcp add`. That needs no sign-in.
       - run: npm test
       - run: npm run check-screenshots
 
