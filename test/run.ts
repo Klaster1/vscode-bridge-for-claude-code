@@ -8,7 +8,7 @@
 //   node test/run.ts            (Node 22.18+), extension loaded from source
 //   BRIDGE_TEST_VSIX=path\to.vsix node test/run.ts   installs that VSIX into the
 //                                isolated extensions folder and tests it instead
-//   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeToolsBridge.autoApprove and the
+//   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeBridge.autoApprove and the
 //                                proposed API it needs; with BRIDGE_TEST_NO_CLICK=1
 //                                the browser tools must then run with no dialog
 //   BRIDGE_TEST_NO_CLICK=1       leaves the confirmation dialogs for a person
@@ -39,7 +39,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = join(root, '.vscode-test', 'run');
 const workspace = join(run, 'workspace');
 const discovery = join(run, 'discovery');
-process.env['VSCODE_TOOLS_BRIDGE_DIR'] = discovery;
+process.env['VSCODE_BRIDGE_DIR'] = discovery;
 
 rmSync(run, { recursive: true, force: true });
 mkdirSync(join(run, 'user-data', 'User'), { recursive: true });
@@ -47,7 +47,7 @@ mkdirSync(join(run, 'extensions'), { recursive: true });
 cpSync(join(root, 'test', 'fixture'), workspace, { recursive: true });
 // A workspace that empties the user's deny list, as a cloned repo's .vscode/settings.json could. The deny list is in the user settings below.
 mkdirSync(join(workspace, '.vscode'));
-writeFileSync(join(workspace, '.vscode', 'settings.json'), JSON.stringify({ 'vscodeToolsBridge.executeCommand.deny': [] }));
+writeFileSync(join(workspace, '.vscode', 'settings.json'), JSON.stringify({ 'vscodeBridge.executeCommand.deny': [] }));
 const autoApprove = !!process.env['BRIDGE_TEST_AUTO_APPROVE'];
 const settingsFile = join(run, 'user-data', 'User', 'settings.json');
 // Settings a check turns on or off while the window runs.
@@ -58,13 +58,13 @@ const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.str
 	'telemetry.telemetryLevel': 'off',
 	'workbench.startupEditor': 'none',
 	'workbench.editor.closeEmptyGroups': false, // The bridge's startup panel must leave no empty group behind.
-	'extensions.confirmedUriHandlerExtensionIds': ['local.vscode-tools-bridge'], // Skips the prompt that a link to an extension raises.
+	'extensions.confirmedUriHandlerExtensionIds': ['klaster1.vscode-bridge-for-claude-code'], // Skips the prompt that a link to an extension raises.
 	'workbench.editorAssociations': { '*.md': 'vscode.markdown.editor' },
 	'chat.agent.enabled': true,
 	'workbench.browser.enableChatTools': true,
-	'vscodeToolsBridge.executeCommand.deny': ['workbench.action.quit'],
-	'vscodeToolsBridge.enabled': enabled,
-	'vscodeToolsBridge.autoApprove': autoApprove,
+	'vscodeBridge.executeCommand.deny': ['workbench.action.quit'],
+	'vscodeBridge.enabled': enabled,
+	'vscodeBridge.autoApprove': autoApprove,
 	...overrides,
 }, null, 2));
 // Start disabled, to check the bridge stays off until the setting is turned on.
@@ -83,7 +83,7 @@ const exe = await downloadAndUnzipVSCode({ version: '1.138.0', cachePath: join(r
 // instance cannot mistake itself for a CLI call into the user's running VS Code.
 const env: NodeJS.ProcessEnv = {};
 for (const [k, v] of Object.entries(process.env)) {
-	if (!/^(VSCODE_|ELECTRON_)/.test(k) || k === 'VSCODE_TOOLS_BRIDGE_DIR') {
+	if (!/^(VSCODE_|ELECTRON_)/.test(k) || k === 'VSCODE_BRIDGE_DIR') {
 		env[k] = v;
 	}
 }
@@ -113,7 +113,7 @@ const code = spawn(exe, [
 	'--skip-welcome',
 	'--skip-release-notes',
 	'--new-window',
-	...(autoApprove ? ['--enable-proposed-api=local.vscode-tools-bridge'] : []),
+	...(autoApprove ? ['--enable-proposed-api=klaster1.vscode-bridge-for-claude-code'] : []),
 	...(process.env['BRIDGE_TEST_TRACE'] ? ['--log=trace'] : []),
 ], { env, stdio: 'ignore' });
 
@@ -388,7 +388,7 @@ try {
 
 		// Each patch has its own setting, which takes effect without a reload.
 		const setSetting = async (key: string, value: boolean) => {
-			overrides[`vscodeToolsBridge.${key}`] = value;
+			overrides[`vscodeBridge.${key}`] = value;
 			writeSettings(true);
 			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
 				if (textOf(await call('execute_command', { command: 'standin.setting', args: [key] })) === String(value)) {
@@ -467,10 +467,10 @@ try {
 			}
 			return false;
 		};
-		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.enabled&url=vscode%3A%2F%2Flocal.vscode-tools-bridge%2Fsettings%3Fid%3DvscodeToolsBridge.enabled');
+		openSettingsLink('vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.enabled&url=vscode%3A%2F%2Fklaster1.vscode-bridge-for-claude-code%2Fsettings%3Fid%3DvscodeBridge.enabled');
 		results.push({ name: 'a setting link opens the Settings editor', ok: await waitForLabel('Settings'), note: `active tab: ${await activeLabel()}` });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
-		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=workbench.colorTheme');
+		openSettingsLink('vscode://klaster1.vscode-bridge-for-claude-code/settings?id=workbench.colorTheme');
 		await sleep(5000);
 		results.push({ name: 'a link to another extension\'s setting is ignored', ok: await activeLabel() !== 'Settings' && /Ignored the link/.test(bridgeLog()), note: `active tab: ${await activeLabel()}` });
 	}

@@ -44,7 +44,7 @@ exports.activate = context => {
 				return `rejected: ${err}`;
 			}
 		}),
-		vscode.commands.registerCommand('standin.setting', key => vscode.workspace.getConfiguration('vscodeToolsBridge').get(key)),
+		vscode.commands.registerCommand('standin.setting', key => vscode.workspace.getConfiguration('vscodeBridge').get(key)),
 		vscode.commands.registerCommand('standin.groupCount', () => vscode.window.tabGroups.all.length),
 		vscode.commands.registerCommand('standin.activeTab', () => {
 			const tab = vscode.window.tabGroups.activeTabGroup.activeTab;

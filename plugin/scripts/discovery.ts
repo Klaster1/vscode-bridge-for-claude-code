@@ -25,17 +25,17 @@ export interface DiscoveryRecord {
  * Directory holding one discovery file per window. On Windows it sits under the
  * user's profile, which only that user (and administrators) can read. Elsewhere
  * ensureDiscoveryDir makes it owner-only. That keeps the pipe name and token
- * private. VSCODE_TOOLS_BRIDGE_DIR moves it, which the isolated test instance uses.
+ * private. VSCODE_BRIDGE_DIR moves it, which the isolated test instance uses.
  */
 export function discoveryDir(): string {
-	const override = process.env['VSCODE_TOOLS_BRIDGE_DIR'];
+	const override = process.env['VSCODE_BRIDGE_DIR'];
 	if (override) {
 		return override;
 	}
 	const base = process.platform === 'win32'
 		? (process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local'))
 		: join(homedir(), '.cache');
-	return join(base, 'vscode-tools-bridge');
+	return join(base, 'vscode-bridge-for-claude-code');
 }
 
 /** Creates the discovery folder for the owner only. Off Windows it also narrows an existing folder with wider permissions, since `mkdir` sets a mode only on a folder it creates. */

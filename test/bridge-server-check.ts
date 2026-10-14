@@ -14,7 +14,7 @@ import { check, finish } from './harness.ts';
 
 const temp = mkdtempSync(join(tmpdir(), 'bc-'));
 const discovery = join(temp, 'missing', 'discovery'); // Not created: the listener must make it.
-process.env['VSCODE_TOOLS_BRIDGE_DIR'] = discovery;
+process.env['VSCODE_BRIDGE_DIR'] = discovery;
 
 // Every server the listener creates, and whether the discovery folder existed when it began to listen.
 const servers: Server[] = [];

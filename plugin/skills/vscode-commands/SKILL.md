@@ -7,7 +7,7 @@ description: Use when running VS Code commands through the vscode-tools MCP serv
 
 `execute_command` runs any VS Code command in the window the session works in and returns its
 result as JSON. `list_commands` finds command IDs by a substring, such as `git.` or `comment`. The
-user's `vscodeToolsBridge.executeCommand.allow` and `deny` settings decide which commands run.
+user's `vscodeBridge.executeCommand.allow` and `deny` settings decide which commands run.
 
 ## Arguments
 

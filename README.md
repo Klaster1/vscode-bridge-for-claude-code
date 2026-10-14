@@ -64,17 +64,17 @@ panel. `/ide` needs Claude Code's VS Code extension installed.
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| [`vscodeToolsBridge.enabled`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.enabled) | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
-| [`vscodeToolsBridge.executeCommand.allow`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. Only your user settings set it, not a workspace's. |
-| [`vscodeToolsBridge.executeCommand.deny`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. Only your user settings set it, not a workspace's. |
-| [`vscodeToolsBridge.autoApprove`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
-| [`vscodeToolsBridge.markdownEditor.selection`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. After you turn it on, reopen an open Markdown Editor, and reload the window for the CLI. |
-| [`vscodeToolsBridge.claudeCode.chatLinks`](vscode://local.vscode-tools-bridge/settings?id=vscodeToolsBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
+| [`vscodeBridge.enabled`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.enabled) | `true` | Serves the window's tools. Set it to `false` in a workspace's settings to turn the bridge off there. |
+| [`vscodeBridge.executeCommand.allow`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. Only your user settings set it, not a workspace's. |
+| [`vscodeBridge.executeCommand.deny`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. Only your user settings set it, not a workspace's. |
+| [`vscodeBridge.autoApprove`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
+| [`vscodeBridge.markdownEditor.selection`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. After you turn it on, reopen an open Markdown Editor, and reload the window for the CLI. |
+| [`vscodeBridge.claudeCode.chatLinks`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 
 To keep Claude from closing the window, for example:
 
 ```jsonc
-"vscodeToolsBridge.executeCommand.deny": ["workbench.action.quit", "workbench.action.closeWindow"]
+"vscodeBridge.executeCommand.deny": ["workbench.action.quit", "workbench.action.closeWindow"]
 ```
 
 ## Install
@@ -101,7 +101,7 @@ the Marketplace.
    VS Code. It lets Claude use the browser without a confirmation dialog.
 
    ```jsonc
-   "enable-proposed-api": ["local.vscode-tools-bridge"]
+   "enable-proposed-api": ["klaster1.vscode-bridge-for-claude-code"]
    ```
 
 To update, install the new `.vsix` and reload the VS Code windows. Then update the plugin and
@@ -115,8 +115,8 @@ claude plugin update vscode-bridge@vscode-bridge
 ### From a clone
 
 You also need the `code` command on your PATH. With Claude Code, start `claude` in the clone and
-ask it to install the bridge. Its `install-vscode-tools-bridge` skill runs the setup script and
-makes the settings edits. It asks you before it changes each file.
+ask it to install the bridge. Its `install-vscode-bridge-for-claude-code` skill runs the setup
+script and makes the settings edits. It asks you before it changes each file.
 
 Without the skill, run this in the clone:
 

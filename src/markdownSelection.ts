@@ -25,7 +25,7 @@ import * as vscode from 'vscode';
 import { claudeCodeApi } from './claudeApi.ts';
 
 const viewType = 'vscode.markdown.editor';
-const messageType = 'vscodeToolsBridge.markdownSelection';
+const messageType = 'vscodeBridge.markdownSelection';
 
 /** Offsets into the Markdown source, in the order the user made the selection. */
 interface Offsets { anchor: number; active: number }
@@ -312,7 +312,7 @@ function findOwner(start: object | null, name: string): { owner: object; descrip
 export function installMarkdownSelection(log: (message: string) => void): vscode.Disposable {
 	report = log;
 	// Every extension's webviews share one prototype, so a throwaway panel gives access to the setter the Markdown extension uses. It opens in the active group: a new group would stay behind when workbench.editor.closeEmptyGroups is off.
-	const panel = vscode.window.createWebviewPanel('vscodeToolsBridge.probe', 'VS Code Bridge for Claude Code', { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {});
+	const panel = vscode.window.createWebviewPanel('vscodeBridge.probe', 'VS Code Bridge for Claude Code', { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {});
 	const prototype: object | null = Object.getPrototypeOf(panel.webview);
 	panel.dispose();
 	const html = findOwner(prototype, 'html');

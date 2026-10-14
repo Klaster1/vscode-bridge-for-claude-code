@@ -1,8 +1,8 @@
 {
-  "name": "vscode-tools-bridge",
+  "name": "vscode-bridge-for-claude-code",
   "displayName": "VS Code Bridge for Claude Code",
   "description": "Gives Claude Code a VS Code window's tools, and shows it what you have open.",
-  "publisher": "local",
+  "publisher": "klaster1",
   "version": "0.4.0",
   "private": true,
   "license": "MIT",
@@ -21,31 +21,31 @@
     "configuration": {
       "title": "VS Code Bridge for Claude Code",
       "properties": {
-        "vscodeToolsBridge.enabled": {
+        "vscodeBridge.enabled": {
           "type": "boolean",
           "default": true,
           "scope": "window",
           "markdownDescription": "Serve this window's tools to Claude Code. Turn it off in the settings of a workspace that should not serve them."
         },
-        "vscodeToolsBridge.markdownEditor.selection": {
+        "vscodeBridge.markdownEditor.selection": {
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "Report the text selected in the Markdown Editor: to Claude Code's selection chip, through the `markdown_editor_selection` tool and in the prompt hook's note. Works only while `#vscodeToolsBridge.enabled#` is on. A Markdown Editor that is open when you turn this on reports its selection after you reopen it, and the Claude Code CLI gets it after a window reload."
+          "markdownDescription": "Report the text selected in the Markdown Editor: to Claude Code's selection chip, through the `markdown_editor_selection` tool and in the prompt hook's note. Works only while `#vscodeBridge.enabled#` is on. A Markdown Editor that is open when you turn this on reports its selection after you reopen it, and the Claude Code CLI gets it after a window reload."
         },
-        "vscodeToolsBridge.claudeCode.chatLinks": {
+        "vscodeBridge.claudeCode.chatLinks": {
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "Open the file links in Claude Code's chat in the editor that VS Code picks for the file, such as the Markdown Editor for `.md`. Works only while `#vscodeToolsBridge.enabled#` is on."
+          "markdownDescription": "Open the file links in Claude Code's chat in the editor that VS Code picks for the file, such as the Markdown Editor for `.md`. Works only while `#vscodeBridge.enabled#` is on."
         },
-        "vscodeToolsBridge.autoApprove": {
+        "vscodeBridge.autoApprove": {
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "Run forwarded tools that ask for confirmation (open or navigate a browser page, run Playwright code) without the modal dialog. Works only while VS Code runs with this extension's proposed API enabled: add `\"enable-proposed-api\": [\"local.vscode-tools-bridge\"]` to `argv.json` (**Preferences: Configure Runtime Arguments**) and restart. Without that, the dialog still shows."
+          "markdownDescription": "Run forwarded tools that ask for confirmation (open or navigate a browser page, run Playwright code) without the modal dialog. Works only while VS Code runs with this extension's proposed API enabled: add `\"enable-proposed-api\": [\"klaster1.vscode-bridge-for-claude-code\"]` to `argv.json` (**Preferences: Configure Runtime Arguments**) and restart. Without that, the dialog still shows."
         },
-        "vscodeToolsBridge.executeCommand.allow": {
+        "vscodeBridge.executeCommand.allow": {
           "type": "array",
           "items": {
             "type": "string"
@@ -56,7 +56,7 @@
           "scope": "application",
           "markdownDescription": "Command IDs the `execute_command` MCP tool may run. `*` matches any run of characters, so `editor.action.*` allows every editor action. A command must match an allow entry and no deny entry. Only your user settings set it; a workspace cannot."
         },
-        "vscodeToolsBridge.executeCommand.deny": {
+        "vscodeBridge.executeCommand.deny": {
           "type": "array",
           "items": {
             "type": "string"

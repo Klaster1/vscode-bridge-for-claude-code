@@ -202,7 +202,7 @@ function matchesAny(id: string, patterns: readonly string[]): boolean {
 }
 
 function commandAllowed(id: string): boolean {
-	const config = vscode.workspace.getConfiguration('vscodeToolsBridge.executeCommand');
+	const config = vscode.workspace.getConfiguration('vscodeBridge.executeCommand');
 	return matchesAny(id, config.get<string[]>('allow', ['*'])) && !matchesAny(id, config.get<string[]>('deny', []));
 }
 
@@ -235,7 +235,7 @@ function reviveArg(v: unknown): unknown {
 const executeCommand: BridgeTool = {
 	definition: {
 		name: 'execute_command',
-		description: 'Run any VS Code command (vscode.commands.executeCommand) and return its result as JSON. No confirmation is shown; the vscodeToolsBridge.executeCommand.allow/deny settings limit which commands run. Arguments are JSON; write {"$uri": "path"} for a Uri, {"$position": {"line": 0, "character": 0}} for a Position and {"$range": {"start": {...}, "end": {...}}} for a Range (all 0-based, as in the VS Code API). Example: {"command": "vscode.executeDefinitionProvider", "args": [{"$uri": "src/a.ts"}, {"$position": {"line": 9, "character": 4}}]}.',
+		description: 'Run any VS Code command (vscode.commands.executeCommand) and return its result as JSON. No confirmation is shown; the vscodeBridge.executeCommand.allow/deny settings limit which commands run. Arguments are JSON; write {"$uri": "path"} for a Uri, {"$position": {"line": 0, "character": 0}} for a Position and {"$range": {"start": {...}, "end": {...}}} for a Range (all 0-based, as in the VS Code API). Example: {"command": "vscode.executeDefinitionProvider", "args": [{"$uri": "src/a.ts"}, {"$position": {"line": 9, "character": 4}}]}.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -248,7 +248,7 @@ const executeCommand: BridgeTool = {
 	async call(args) {
 		const id = str(args['command'], 'command');
 		if (!commandAllowed(id)) {
-			return text(`Command "${id}" is blocked by the vscodeToolsBridge.executeCommand allow/deny settings.`, true);
+			return text(`Command "${id}" is blocked by the vscodeBridge.executeCommand allow/deny settings.`, true);
 		}
 		const commandArgs = Array.isArray(args['args']) ? args['args'].map(reviveArg) : [];
 		const result = await vscode.commands.executeCommand(id, ...commandArgs);
@@ -349,7 +349,7 @@ const forwarded: Record<string, string> = {
 const confirming = new Set(['open_browser_page', 'navigate_page', 'run_playwright_code']);
 
 /**
- * With vscodeToolsBridge.autoApprove on, answers those confirmations the way a
+ * With vscodeBridge.autoApprove on, answers those confirmations the way a
  * chat preToolUse hook would, so VS Code runs the tool without the dialog.
  * Copilot never shows one because the chat path honours
  * chat.tools.global.autoApprove; the tokenless path ignores that setting and
@@ -359,7 +359,7 @@ const confirming = new Set(['open_browser_page', 'navigate_page', 'run_playwrigh
  * silently drops it otherwise, so the dialog then still shows.
  */
 function approval(): object {
-	return vscode.workspace.getConfiguration('vscodeToolsBridge').get<boolean>('autoApprove', true)
+	return vscode.workspace.getConfiguration('vscodeBridge').get<boolean>('autoApprove', true)
 		? { preToolUseResult: { permissionDecision: 'allow' } }
 		: {};
 }
@@ -520,7 +520,7 @@ const markdownEditorSelectionTool: BridgeTool = {
 	},
 	async call(args) {
 		if (!markdownSelectionRunning()) {
-			return text('The Markdown Editor selection is not being read: vscodeToolsBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the editor.');
+			return text('The Markdown Editor selection is not being read: vscodeBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the editor.');
 		}
 		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
 		const entries: string[] = [];
