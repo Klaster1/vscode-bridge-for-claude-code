@@ -12,6 +12,10 @@
 //   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeToolsBridge.autoApprove and the
 //                                proposed API it needs; with BRIDGE_TEST_NO_CLICK=1
 //                                the browser tools must then run with no dialog
+//   BRIDGE_TEST_NO_CLICK=1       leaves the confirmation dialogs for a person
+//   BRIDGE_TEST_WINDOW=none      leaves the test window where VS Code puts it; the
+//                                default, offscreen, moves it away without activating it
+//   BRIDGE_TEST_TRACE=1          starts VS Code with --log=trace
 
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -117,8 +121,7 @@ const code = spawn(exe, [
 // answers the confirmation dialogs that tokenless tool calls raise, touching
 // only windows of this instance's main process. BRIDGE_TEST_WINDOW picks how
 // the window is kept away: offscreen (default; stays rendered, which
-// Playwright's click needs), minimize (the page stops rendering and
-// click_element times out) or none.
+// Playwright's click needs) or none.
 // BRIDGE_TEST_NO_CLICK=1 leaves dialogs for a person (or the 15 s timeout).
 const dialogLog = join(run, 'window-helper.log');
 const clicker = process.platform === 'win32' && code.pid
