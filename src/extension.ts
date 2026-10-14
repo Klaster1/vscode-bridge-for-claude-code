@@ -16,7 +16,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryDir, discoveryFile, folderHash, type DiscoveryRecord } from './discovery.ts';
 import { installChatLinks } from './chatLinks.ts';
+import { registerConnect } from './connect.ts';
 import { installMarkdownSelection } from './markdownSelection.ts';
+import { writeShims } from './shims.ts';
 import { allTools } from './tools.ts';
 
 let log: vscode.LogOutputChannel;
@@ -39,6 +41,16 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		},
 	}));
+	// Claude Code's config points at these, so they exist whether or not the bridge is on.
+	try {
+		const written = writeShims(context.extensionPath);
+		if (written.length) {
+			log.info(`Wrote ${written.join(' and ')}.`);
+		}
+	} catch (err) {
+		log.error(`Could not write the launcher and hook shims: ${err instanceof Error ? err.message : String(err)}`);
+	}
+	registerConnect(context, log);
 	const restart = () => {
 		stop();
 		start().catch(err => log.error(`Bridge failed to start: ${err instanceof Error ? err.message : String(err)}`));

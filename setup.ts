@@ -9,15 +9,16 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { shimPaths, writeShims } from './src/shims.ts';
 
 const root = import.meta.dirname;
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { name: string; publisher: string; version: string };
 const extensionId = `${pkg.publisher}.${pkg.name}`;
 const vsix = join(root, `${pkg.name}-${pkg.version}.vsix`);
-// Forward slashes work in Node on every platform and need no escaping in JSON or a shell.
-const slashed = (path: string): string => path.replaceAll('\\', '/');
-const launcher = slashed(join(root, 'launcher.ts'));
-const hook = slashed(join(root, 'prompt-hook.ts'));
+// Claude Code's config points at the shims in a fixed folder, which import the files of the
+// extension version VS Code runs. They point at this clone until the extension starts and takes them over.
+writeShims(root);
+const { launcher, hook } = shimPaths();
 
 function run(command: string, args: string[], quiet = false): boolean {
 	const stdio = quiet ? 'ignore' : 'inherit';

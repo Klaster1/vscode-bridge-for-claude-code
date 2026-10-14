@@ -6,8 +6,10 @@ description: Use when the user asks to install, set up, update or reinstall the 
 # Install or update the VS Code Bridge for Claude Code
 
 The bridge has three parts: a VS Code extension, the `vscode-tools` MCP server that Claude
-Code starts (`launcher.ts`), and a prompt hook (`prompt-hook.ts`). `npm run setup`
-installs the first two. The settings edits are left to you, and each one needs the user's
+Code starts (`launcher.ts`), and a prompt hook (`prompt-hook.ts`). Claude Code's config points
+at two shims, `launcher.mjs` and `prompt-hook.mjs`, in a fixed folder that the extension and
+the setup script write; each imports the matching `.ts` file. `npm run setup` installs the
+first two parts. The settings edits are left to you, and each one needs the user's
 consent.
 
 The bridge is on in every VS Code window by default. To turn it off in one workspace, set
@@ -43,7 +45,7 @@ The bridge is on in every VS Code window by default. To turn it off in one works
    user shared, which images are on screen and what is selected in the Markdown Editor.
    The file is `~/.claude/settings.json`. Add the entry the script printed to the
    `hooks.UserPromptSubmit` array; create `hooks` and the array if they are missing. An
-   entry that already runs `prompt-hook.ts` from another path is the old install: replace
+   entry that already runs a `prompt-hook` file from another path is the old install: replace
    it. Parse the file afterwards to check it is valid JSON.
 4. **Skip the browser confirmations**, if the user wants it. Without this, VS Code shows a
    dialog before `open_browser_page`, `navigate_page` and `run_playwright_code` run.
@@ -59,8 +61,7 @@ The bridge is on in every VS Code window by default. To turn it off in one works
 ## Update after a `git pull`
 
 Run `npm run setup` again, then ask the user to reload each VS Code window. The hook and
-`argv.json` entries stay valid while the clone stays in the same folder. When the clone
-moved, replace the hook entry with the one the script prints.
+`argv.json` entries stay valid, even when the clone moves, because they point at the shims.
 
 ## Check
 
@@ -73,7 +74,7 @@ moved, replace the hook entry with the one the script prints.
    then pick the channel). It shows `Listening on <pipe> for <folder>`, and one line per
    tool call. The same log is on disk, in the newest session folder under VS Code's
    `logs` folder: `window<N>/exthost/local.vscode-tools-bridge/VS Code Bridge for Claude Code.log`.
-4. To check the hook, run `echo '{"cwd":"<the workspace folder>"}' | node prompt-hook.ts`.
+4. To check the hook, run `echo '{"cwd":"<the workspace folder>"}' | node <the hook path from the settings file>`.
    It exits with 0. It prints JSON only while a page is shared, an image is in front in an
    editor group or text is selected in a Markdown Editor; otherwise it prints nothing.
 

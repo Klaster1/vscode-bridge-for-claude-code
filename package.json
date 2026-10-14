@@ -67,7 +67,13 @@
           "markdownDescription": "Command IDs the `execute_command` MCP tool must never run, with the same `*` wildcard. Deny wins over allow."
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "vscodeToolsBridge.connectClaudeCode",
+        "title": "VS Code Bridge for Claude Code: Connect Claude Code"
+      }
+    ]
   },
   "scripts": {
     "setup": "node setup.ts",

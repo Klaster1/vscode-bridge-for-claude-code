@@ -66,12 +66,33 @@ To keep Claude from closing the window, for example:
 
 ## Install
 
-You need VS Code 1.138 or later, Node 22.18 or later, and the `code` and `claude` commands on
-your PATH. The bridge is not on the Marketplace, so you install it from a clone of this repo.
+You need VS Code 1.138 or later, Node 22.18 or later, and the `claude` command on your PATH.
+The bridge is not on the Marketplace.
 
-With Claude Code, start `claude` in the clone and ask it to install the bridge. Its
-`install-vscode-tools-bridge` skill runs the setup script and makes the settings edits. It asks
-you before it changes each file.
+### From a release
+
+1. Download the `.vsix` file from the repo's Releases page.
+2. Install it: run `code --install-extension <file>`, or use **Install from VSIX...** in the
+   Extensions view.
+3. Reload each open VS Code window with **Developer: Reload Window**.
+4. Run **VS Code Bridge for Claude Code: Connect Claude Code** from the Command Palette. It asks
+   first, then adds the `vscode-tools` MCP server and the prompt hook to Claude Code. The prompt
+   hook lets Claude know the pages you share, the images you have open and your Markdown Editor
+   selection.
+5. Run **Preferences: Configure Runtime Arguments**, add this line to `argv.json` and restart
+   VS Code. It lets Claude use the browser without a confirmation dialog.
+
+   ```jsonc
+   "enable-proposed-api": ["local.vscode-tools-bridge"]
+   ```
+
+To update, install the new `.vsix` and reload the VS Code windows.
+
+### From a clone
+
+You also need the `code` command on your PATH. With Claude Code, start `claude` in the clone and
+ask it to install the bridge. Its `install-vscode-tools-bridge` skill runs the setup script and
+makes the settings edits. It asks you before it changes each file.
 
 Without the skill, run this in the clone:
 
@@ -80,45 +101,36 @@ npm run setup
 ```
 
 The script builds the extension, installs it into VS Code and adds `vscode-tools` to Claude
-Code. It then prints the steps left to you, with the clone's paths filled in.
+Code. It then prints the steps left to you, with the paths filled in.
 
-By hand:
+To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
 
-1. Build and install the extension:
+### By hand
+
+When the extension starts, it writes `launcher.mjs` and `prompt-hook.mjs` to
+`%LOCALAPPDATA%\vscode-tools-bridge` on Windows, and to `~/.local/share/vscode-tools-bridge`
+elsewhere. Claude Code's configuration points at these two files, which keep their path when the
+extension updates. To do the Connect step yourself, replace `<folder>` below with that folder, with
+forward slashes.
+
+1. Add the MCP server to Claude Code:
 
    ```sh
-   npm ci
-   npm run package
-   code --install-extension vscode-tools-bridge-0.0.1.vsix --force
+   claude mcp add --scope user vscode-tools -- node <folder>/launcher.mjs
    ```
 
-2. Add the MCP server to Claude Code, with the absolute path to `launcher.ts`:
-
-   ```sh
-   claude mcp add --scope user vscode-tools -- node /path/to/vscode-tools-bridge/launcher.ts
-   ```
-
-3. Reload each open VS Code window with **Developer: Reload Window**.
-4. Run **Preferences: Configure Runtime Arguments**, add this line to `argv.json` and restart
-   VS Code. It lets Claude use the browser without a confirmation dialog.
-
-   ```jsonc
-   "enable-proposed-api": ["local.vscode-tools-bridge"]
-   ```
-
-5. Add the prompt hook to `~/.claude/settings.json`. It lets Claude know the pages you share, the
-   images you have open and your Markdown Editor selection.
+2. Add the prompt hook to `~/.claude/settings.json`:
 
    ```json
    "hooks": {
      "UserPromptSubmit": [
-       { "hooks": [{ "type": "command", "command": "node \"/path/to/vscode-tools-bridge/prompt-hook.ts\"", "timeout": 5 }] }
+       { "hooks": [{ "type": "command", "command": "node \"<folder>/prompt-hook.mjs\"", "timeout": 5 }] }
      ]
    }
    ```
 
-To check the install, start `claude` in the window's first workspace folder or a folder below
-it. `/mcp` lists `vscode-tools` as connected, and the **VS Code Bridge for Claude Code** output channel
-logs each call. After a window reload, run `/mcp` and reconnect `vscode-tools`.
+### Check
 
-To update, run `git pull` and `npm run setup`, then reload the VS Code windows.
+Start `claude` in the window's first workspace folder or a folder below it. `/mcp` lists
+`vscode-tools` as connected, and the **VS Code Bridge for Claude Code** output channel logs each
+call. After a window reload, run `/mcp` and reconnect `vscode-tools`.

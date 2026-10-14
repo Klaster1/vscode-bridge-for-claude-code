@@ -1,7 +1,8 @@
 // End-to-end check in an isolated VS Code: downloads VS Code 1.138.0 into
 // .vscode-test/, starts it with its own user-data and extensions folders and
 // this extension loaded from source, then talks to the bridge through
-// launcher.ts exactly as Claude Code would (stdio MCP, cwd = workspace root).
+// launcher.ts exactly as Claude Code would (stdio MCP, cwd = workspace root), through
+// the shims in a fixed folder that Claude Code's config points at.
 // The user's own VS Code, settings and ~/.claude.json are never touched.
 //
 //   node test/run.ts            (Node 22.18+), extension loaded from source
@@ -17,12 +18,13 @@ import { createServer } from 'node:http';
 import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } from '@vscode/test-electron';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryFile, type DiscoveryRecord } from '../src/discovery.ts';
+import { shimPaths, writeShims } from '../src/shims.ts';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = join(root, '.vscode-test', 'run');
@@ -73,6 +75,12 @@ for (const [k, v] of Object.entries(process.env)) {
 		env[k] = v;
 	}
 }
+// The Connect command writes Claude Code's config; this folder keeps it away from the user's own.
+const claudeConfig = join(run, 'claude-config');
+mkdirSync(claudeConfig, { recursive: true });
+env['CLAUDE_CONFIG_DIR'] = claudeConfig;
+// An old registration: the Connect check must replace it, and the extension offers no connection while one exists.
+writeFileSync(join(claudeConfig, '.claude.json'), JSON.stringify({ mcpServers: { 'vscode-tools': { type: 'stdio', command: 'node', args: ['/old/clone/launcher.ts'], env: {} } } }));
 const vsix = process.env['BRIDGE_TEST_VSIX'];
 if (vsix) {
 	// Keep the CLI script path but replace its default user-data and extensions folders with ours.
@@ -121,7 +129,7 @@ let client: Client | undefined;
 // fresh process, the hook payload as JSON on stdin, cwd in the payload.
 const runHook = (cwd: string, surface: 'chip' | 'cli' | 'cli-without-vscode' = 'chip') => {
 	const started = Date.now();
-	const out = spawnSync(process.execPath, [join(root, 'prompt-hook.ts')], {
+	const out = spawnSync(process.execPath, [shimPaths().hook], {
 		input: JSON.stringify({ session_id: 'test', transcript_path: '', cwd, permission_mode: 'default', hook_event_name: 'UserPromptSubmit', prompt: 'What is on the page?' }),
 		// The chat panel's process has the entrypoint claude-vscode; a CLI in a VS Code terminal has cli and VS Code's port variable.
 		env: { ...env, CLAUDE_CODE_ENTRYPOINT: surface === 'chip' ? 'claude-vscode' : 'cli', ...(surface === 'cli' ? { CLAUDE_CODE_SSE_PORT: '1' } : {}) },
@@ -180,7 +188,7 @@ try {
 	results.push({ name: 'token check', ok: rejected === '', note: rejected ? `got reply: ${rejected.slice(0, 80)}` : 'connection closed, no reply' });
 
 	client = new Client({ name: 'bridge-test', version: '0' });
-	await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(root, 'launcher.ts')], cwd: workspace, env: env as Record<string, string>, stderr: 'inherit' }));
+	await client.connect(new StdioClientTransport({ command: process.execPath, args: [shimPaths().launcher], cwd: workspace, env: env as Record<string, string>, stderr: 'inherit' }));
 	const { tools } = await client.listTools();
 	console.log(`Tools (${tools.length}): ${tools.map(t => t.name).join(', ')}`);
 
@@ -438,6 +446,41 @@ try {
 		openSettingsLink('vscode://local.vscode-tools-bridge/settings?id=workbench.colorTheme');
 		await new Promise(r => setTimeout(r, 5000));
 		results.push({ name: 'a link to another extension\'s setting is ignored', ok: await activeLabel() !== 'Settings' && /Ignored the link/.test(bridgeLog()), note: `active tab: ${await activeLabel()}` });
+	}
+
+	// The shims: the extension wrote them when it started, and every connection above ran through them.
+	{
+		const shims = shimPaths();
+		const dir = dirname(shims.launcher);
+		const shimText = (file: string) => readFileSync(join(dir, file), 'utf8');
+		// VS Code may write the drive letter in lower case.
+		const loads = (file: string, target: string) => shimText(file).toLowerCase().includes(pathToFileURL(join(root, target)).href.toLowerCase());
+		results.push({ name: 'the extension wrote the launcher and hook shims', ok: loads('launcher.mjs', 'launcher.ts') && loads('prompt-hook.mjs', 'prompt-hook.ts'), note: dir });
+		// What setup.ts writes for a clone, in a throwaway folder: complete, then left alone, then repaired.
+		const clone = join(run, 'clone-shims');
+		const first = writeShims(root, clone);
+		const second = writeShims(root, clone);
+		writeFileSync(join(clone, 'launcher.mjs'), 'edited');
+		const third = writeShims(root, clone);
+		results.push({ name: 'writeShims writes a clone once and repairs a changed file', ok: first.length === 2 && second.length === 0 && third.join() === 'launcher.mjs' && readFileSync(join(clone, 'launcher.mjs'), 'utf8').includes(pathToFileURL(join(root, 'launcher.ts')).href), note: `${first.length} written, then ${second.length}, then ${third.join()}` });
+	}
+
+	{
+		// Connect Claude Code, against the throwaway Claude Code config folder. The modal is answered like the other dialogs.
+		const settings = join(claudeConfig, 'settings.json');
+		const entry = (command: string) => ({ hooks: [{ type: 'command', command }] });
+		writeFileSync(settings, JSON.stringify({ theme: 'dark', hooks: { UserPromptSubmit: [entry('node "/old/clone/prompt-hook.ts"'), entry('echo unrelated')] } }));
+		const connected = await call('execute_command', { command: 'vscodeToolsBridge.connectClaudeCode' }, 90_000);
+		console.log(`\n--- Connect Claude Code ---\n${textOf(connected)}`);
+		await check('Connect Claude Code registers the MCP server', async () => {
+			const server = (JSON.parse(readFileSync(join(claudeConfig, '.claude.json'), 'utf8')) as { mcpServers?: Record<string, { command?: string; args?: string[] }> }).mcpServers?.['vscode-tools'];
+			return server?.command === 'node' && server.args?.join() === shimPaths().launcher || JSON.stringify(server);
+		});
+		await check('Connect Claude Code replaces the hook entry and keeps the rest', async () => {
+			const saved = JSON.parse(readFileSync(settings, 'utf8')) as { theme?: string; hooks?: { UserPromptSubmit?: { hooks: { command: string }[] }[] } };
+			const commands = saved.hooks?.UserPromptSubmit?.flatMap(e => e.hooks.map(h => h.command)) ?? [];
+			return saved.theme === 'dark' && commands.join('|') === `echo unrelated|node "${shimPaths().hook}"` || JSON.stringify(saved).slice(0, 300);
+		});
 	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.
