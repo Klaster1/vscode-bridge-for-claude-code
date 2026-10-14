@@ -4,7 +4,7 @@
 // Imports nothing from 'vscode', so the launcher and hook can load it in plain Node.
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -21,10 +21,10 @@ export interface DiscoveryRecord {
 }
 
 /**
- * Directory holding one discovery file per window. It sits under the user's
- * profile, which only that user (and administrators) can read, and that is
- * what keeps the pipe name and token private. VSCODE_TOOLS_BRIDGE_DIR moves
- * it, which the isolated test instance uses.
+ * Directory holding one discovery file per window. On Windows it sits under the
+ * user's profile, which only that user (and administrators) can read. Elsewhere
+ * ensureDiscoveryDir makes it owner-only. That keeps the pipe name and token
+ * private. VSCODE_TOOLS_BRIDGE_DIR moves it, which the isolated test instance uses.
  */
 export function discoveryDir(): string {
 	const override = process.env['VSCODE_TOOLS_BRIDGE_DIR'];
@@ -35,6 +35,16 @@ export function discoveryDir(): string {
 		? (process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local'))
 		: join(homedir(), '.cache');
 	return join(base, 'vscode-tools-bridge');
+}
+
+/** Creates the discovery folder for the owner only. Off Windows it also narrows an existing folder with wider permissions, since `mkdir` sets a mode only on a folder it creates. */
+export function ensureDiscoveryDir(): string {
+	const dir = discoveryDir();
+	mkdirSync(dir, { recursive: true, mode: 0o700 });
+	if (process.platform !== 'win32') {
+		chmodSync(dir, 0o700);
+	}
+	return dir;
 }
 
 /**
