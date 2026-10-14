@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest # test/window-helper.ps1 drives VS Code windows through Win32 and UI Automation.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24 # The Node line of VS Code 1.138's extension host. It runs the .ts files by type stripping, as the extension does.
+          cache: npm
+
+      - name: Read the VS Code version the end-to-end test uses
+        id: vscode
+        run: |
+          $version = (Select-String -Path test/run.ts -Pattern "version: '([\d.]+)'").Matches[0].Groups[1].Value
+          if (-not $version) { throw 'No VS Code version found in test/run.ts' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/cache@v6
+        with:
+          path: .vscode-test/vscode-*
+          key: vscode-${{ runner.os }}-${{ steps.vscode.outputs.version }}
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run check-screenshots
+
+      - run: npm run package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsix
+          path: '*.vsix'
+          if-no-files-found: error
+
+      - name: Capture the screen
+        if: failure()
+        continue-on-error: true
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bitmap.Save('screen.png')
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: test-logs
+          path: |
+            screen.png
+            .vscode-test/run/*.log
+            .vscode-test/run/user-data/logs/
+          if-no-files-found: ignore
+
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release # Two quick pushes to main must not race on the same tag.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Stop when the tag exists
+        id: tag
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version exists: nothing to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.tag.outputs.exists != 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - if: steps.tag.outputs.exists != 'true'
+        name: Build the VSIX and the release notes
+        run: |
+          npm ci
+          npm run package
+          # The top CHANGELOG.md section, without its heading: the release title is the version.
+          awk '/^## \[/ { if (found) exit; found = 1; next } found' CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed '1{/^$/d}' > notes.md
+          test -s notes.md
+
+      - if: steps.tag.outputs.exists != 'true'
+        name: Create the tag and the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: gh release create "v$VERSION" ./*.vsix --target "$GITHUB_SHA" --title "v$VERSION" --notes-file notes.md
