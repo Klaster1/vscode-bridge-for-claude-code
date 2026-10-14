@@ -8,6 +8,7 @@ and Claude Code at runtime so that Claude sees what the user has open.
 - `src/extension.ts`: activation, the per-window MCP server on a named pipe (a Unix socket on
   macOS and Linux), the discovery file, the URI handler for setting links, and the switch for
   each runtime patch.
+- `src/instructions.ts`: the MCP server instructions, which tell Claude when the tools fit.
 - `src/tools.ts`: the MCP tools. Some use the stable API. The rest forward VS Code's and
   Copilot's language-model tools from `vscode.lm.tools`. `src/render.ts` turns their
   prompt-tsx results into text.

@@ -3,7 +3,7 @@
   "displayName": "VS Code Bridge for Claude Code",
   "description": "Publishes selected VS Code and Copilot agent tools to Claude Code over MCP, through a per-window named pipe.",
   "publisher": "local",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "type": "module",

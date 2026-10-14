@@ -219,6 +219,16 @@ try {
 		return groups === '1' || `${groups} editor groups`;
 	});
 
+	await check('server instructions name only tools the bridge serves', async () => {
+		const text = client!.getInstructions() ?? '';
+		const browserTools = ['shared_browser_pages', 'open_browser_page', 'screenshot_page', 'run_playwright_code'];
+		const named = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])];
+		const missing = named.filter(n => !has(n) && (has('list_browser_pages') || !browserTools.includes(n)));
+		if (!text || text.length > 4096) {
+			return `${text.length} characters; Claude Code cuts them at 4096`;
+		}
+		return named.includes('execute_command') && missing.length === 0 || `names ${named.join(', ')}; not served: ${missing.join(', ')}`;
+	});
 	await expectText('list_workspaces', 'list_workspaces', {}, /"folders"[\s\S]*workspace/);
 	await expectText('get_diagnostics finds the type error', 'get_diagnostics', { paths: ['src/broken.ts'], minSeverity: 'error', waitMs: 20_000 }, /broken\.ts:1:\d+ error \[ts/, 60_000);
 	await expectText('rename_symbol', 'rename_symbol', { path: 'src/greet.ts', line: 1, symbol: 'oldName', newName: 'newGreeting' }, /2 file\(s\)/, 60_000);
