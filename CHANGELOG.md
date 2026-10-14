@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.0] - 2026-10-14
+
+### Added
+
+- Uninstalling the extension removes its Claude Code server, prompt hook and launcher files.
+
+### Changed
+
+- Connect Claude Code keeps a working registration, and restores the old one if the new one fails.
+- The Extensions view describes what the extension does.
+
+### Fixed
+
+- The bridge starts on Linux and macOS on a first run.
+- `npm run setup` no longer stops at a packaging question that aborts the build.
+- `npm run setup` adds the prompt hook to the settings file Claude Code reads.
+- A quick restart of a window no longer leaves a stale bridge listening.
+- A launcher that starts while a window restarts connects instead of failing.
+- The launcher names the Node version it needs when Node is too old.
+
+### Security
+
+- A workspace's settings can no longer change the `execute_command` allow and deny lists.
+- The bridge closes a connection that sends no token within 5 seconds.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added

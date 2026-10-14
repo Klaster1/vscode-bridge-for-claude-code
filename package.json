@@ -3,7 +3,7 @@
   "displayName": "VS Code Bridge for Claude Code",
   "description": "Gives Claude Code a VS Code window's tools, and shows it what you have open.",
   "publisher": "local",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
