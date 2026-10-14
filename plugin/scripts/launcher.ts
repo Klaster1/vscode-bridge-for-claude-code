@@ -7,7 +7,7 @@
 //   node launcher.ts
 
 import { connect } from 'node:net';
-import { findRecord } from './src/discovery.ts';
+import { findRecord } from './discovery.ts';
 
 // Claude Code can start this before the window has activated the extension or
 // switched to this folder, so look for the window for a few seconds before giving up.

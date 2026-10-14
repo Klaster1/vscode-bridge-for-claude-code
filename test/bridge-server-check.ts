@@ -9,7 +9,7 @@ import { connect, Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBridgeListener } from '../src/bridgeServer.ts';
-import { discoveryFile, type DiscoveryRecord } from '../src/discovery.ts';
+import { discoveryFile, type DiscoveryRecord } from '../plugin/scripts/discovery.ts';
 import { check, finish } from './harness.ts';
 
 const temp = mkdtempSync(join(tmpdir(), 'bc-'));

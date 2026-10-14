@@ -1,0 +1,15 @@
+{
+  "name": "vscode-bridge",
+  "description": "The Claude Code side of VS Code Bridge for Claude Code.",
+  "owner": {
+    "name": "Klaster_1",
+    "url": "https://github.com/Klaster1"
+  },
+  "plugins": [
+    {
+      "name": "vscode-bridge",
+      "source": "./plugin",
+      "description": "Gives Claude Code the tools and the screen of the VS Code window it works in. Needs the VS Code Bridge for Claude Code extension."
+    }
+  ]
+}

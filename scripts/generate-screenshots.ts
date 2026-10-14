@@ -21,7 +21,7 @@ import { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } from '
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { _electron, type Frame, type Locator } from 'playwright';
-import { discoveryFile } from '../src/discovery.ts';
+import { discoveryFile } from '../plugin/scripts/discovery.ts';
 import { commandLine } from '../src/shell.ts';
 import { hashInputs, recordFile, type InputRecord } from './screenshot-inputs.ts';
 
@@ -81,6 +81,7 @@ const claudeCodeVersion = (JSON.parse(readFileSync(join(claudeCode, 'package.jso
 console.log(`Claude Code ${claudeCodeVersion} from ${claudeCode}`);
 const claudeCodeCopy = join(extensions, claudeCode.split(/[\\/]/).at(-1)!);
 cpSync(claudeCode, claudeCodeCopy, { recursive: true });
+const claudeExe = join(claudeCodeCopy, 'resources', 'native-binary', 'claude.exe');
 
 // The flags skip the CLI's first-run screens and one-time notices.
 writeFileSync(join(claudeConfig, '.claude.json'), JSON.stringify({
@@ -93,7 +94,6 @@ writeFileSync(join(claudeConfig, '.claude.json'), JSON.stringify({
 	hasSeenAutoModeEntryWarning: true,
 	customApiKeyResponses: { approved: [apiKey.slice(-20)], rejected: [] },
 	projects: { [posix(workspace)]: { hasTrustDialogAccepted: true, allowedTools: [] } },
-	mcpServers: { 'vscode-tools': { type: 'stdio', command: 'node', args: [posix(join(root, 'launcher.ts'))], env: {} } },
 }, null, 2));
 writeFileSync(join(claudeConfig, 'settings.json'), JSON.stringify({ theme: 'light', prefersReducedMotion: true }, null, 2));
 
@@ -145,7 +145,7 @@ writeFileSync(join(userData, 'User', 'settings.json'), JSON.stringify({
 	'breadcrumbs.enabled': false,
 	'terminal.integrated.cursorBlinking': false,
 	'terminal.integrated.gpuAcceleration': 'off', // The DOM renderer, whose text the script waits on.
-	'terminal.integrated.profiles.windows': { claude: { path: join(claudeCodeCopy, 'resources', 'native-binary', 'claude.exe') } },
+	'terminal.integrated.profiles.windows': { claude: { path: claudeExe } },
 	'terminal.integrated.defaultProfile.windows': 'claude',
 	'claudeCode.hideOnboarding': true,
 	'claudeCode.showMessageTimestamps': false,
@@ -192,6 +192,13 @@ Object.assign(env, {
 // The bridge's default discovery folder is under LOCALAPPDATA, so it is isolated too. A
 // VSCODE_TOOLS_BRIDGE_DIR would not reach the CLI: VS Code drops VSCODE_* variables from terminals.
 process.env['LOCALAPPDATA'] = env['LOCALAPPDATA'];
+// The plugin from the working tree, as `npm run setup` installs it: it loads in place.
+for (const args of [['plugin', 'marketplace', 'add', root], ['plugin', 'install', 'vscode-bridge@vscode-bridge']]) {
+	const result = spawnSync(claudeExe, args, { env, encoding: 'utf8' });
+	if (result.status !== 0) {
+		throw new Error(`claude ${args.join(' ')} failed:\n${result.stdout}\n${result.stderr}`);
+	}
+}
 
 const inputs = hashInputs(root); // Before packaging, so the record matches the code the shots show.
 const vscodeVersion = '1.138.0';
@@ -245,7 +252,7 @@ try {
 		await sleep(500);
 	}
 	client = new Client({ name: 'screenshots', version: '0' });
-	await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(root, 'launcher.ts')], cwd: workspace, env }));
+	await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(root, 'plugin', 'launcher.mjs')], cwd: workspace, env }));
 	const command = async (id: string, ...args: unknown[]) => {
 		const result = await client!.callTool({ name: 'execute_command', arguments: { command: id, args } });
 		if (result.isError) {

@@ -20,7 +20,7 @@
 //   node prompt-hook.ts      (Node 22.18+, payload on stdin)
 
 import { connect } from 'node:net';
-import { findRecord } from './src/discovery.ts';
+import { findRecord } from './discovery.ts';
 
 const BUDGET_MS = 900;
 setTimeout(() => process.exit(0), BUDGET_MS).unref();

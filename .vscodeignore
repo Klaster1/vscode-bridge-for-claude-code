@@ -4,6 +4,9 @@ tsconfig.json
 *.vsix
 .claude/**
 setup.ts
+.claude-plugin/**
+plugin/**
+!plugin/scripts/discovery.ts
 .vscode/**
 *.code-workspace
 scripts/**
