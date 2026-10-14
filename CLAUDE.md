@@ -68,8 +68,8 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
 
 - `npm run typecheck` runs `tsc` with no output files. A new top-level `.ts` file goes into the
   `include` list of `tsconfig.json`.
-- `npm test` runs two offline checks, `test/render-check.ts` and `test/glob-check.ts`, and then
-  the end-to-end test, `test/run.ts`.
+- `npm test` runs three offline checks, `test/render-check.ts`, `test/glob-check.ts` and
+  `test/changelog-check.ts`, and then the end-to-end test, `test/run.ts`.
 - The end-to-end test downloads VS Code 1.138.0 into `.vscode-test/`. It starts it with its own
   user data, extensions, discovery folder and Claude Code config, and calls every tool through
   the launcher shim. The user's own VS Code and Claude Code config stay untouched.
@@ -92,6 +92,18 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
 
 The version in `package.json` follows semver. The first release is 0.0.1. You decide when a
 change needs a new version and which part to bump.
+
+Every version bump adds its section to `CHANGELOG.md` in the same commit:
+
+- The heading is `## [x.y.z] - YYYY-MM-DD`, newest first, followed by `### Added`, `### Changed`,
+  `### Fixed` or `### Removed` as needed.
+- Each bullet is one user-visible change in user terms, as in the README, with no internals.
+- A bullet is one line of at most 100 characters, counted after the `- `, Markdown included.
+- A change that users don't see, such as a test, a refactor or a doc edit, gets no entry.
+
+`test/changelog-check.ts`, part of `npm test`, enforces these rules. It also checks that the top
+version equals the one in `package.json`. VS Code shows the file in the extension's Changelog
+tab. The planned release workflow is to use the top section as the GitHub Release notes.
 
 ## README
 
