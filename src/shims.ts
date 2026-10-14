@@ -30,8 +30,8 @@ const nodeGuard = `if (!process.features.typescript) {
 `;
 
 /** The shim paths with forward slashes, which Node accepts on every platform and which need no escaping in JSON or a shell. */
-export function shimPaths(dir = shimDir()): { launcher: string; hook: string } {
-	const slashed = (file: string): string => join(dir, file).replaceAll('\\', '/');
+export function shimPaths(): { launcher: string; hook: string } {
+	const slashed = (file: string): string => join(shimDir(), file).replaceAll('\\', '/');
 	return { launcher: slashed(files.launcher), hook: slashed(files.hook) };
 }
 
