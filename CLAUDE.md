@@ -5,9 +5,10 @@ and Claude Code at runtime so that Claude sees what the user has open.
 
 ## Layout
 
-- `src/extension.ts`: activation, the per-window MCP server on a named pipe (a Unix socket on
-  macOS and Linux), the discovery file, the URI handler for setting links, and the switch for
-  each runtime patch.
+- `src/extension.ts`: activation, the MCP server for each connection, the URI handler for
+  setting links, and the switch for each runtime patch.
+- `src/bridgeServer.ts`: the per-window listener on a named pipe (a Unix socket on macOS and
+  Linux), the token check on each connection, and the discovery file.
 - `src/instructions.ts`: the MCP server instructions, which tell Claude when the tools fit.
 - `src/tools.ts`: the MCP tools. Some use the stable API. The rest forward VS Code's and
   Copilot's language-model tools from `vscode.lm.tools`. `src/render.ts` turns their
@@ -17,14 +18,20 @@ and Claude Code at runtime so that Claude sees what the user has open.
 - `src/markdownSelection.ts`, `src/chatLinks.ts`, `src/claudeApi.ts`: the runtime patches.
 - `src/shims.ts`: writes `launcher.mjs` and `prompt-hook.mjs` to a fixed folder. Claude Code's
   config points at them, and each imports the files of the extension version that wrote it.
-- `src/connect.ts`: the **Connect Claude Code** command. It registers the MCP server and the
-  prompt hook with the shims, for an install from a release.
+- `src/connect.ts`: the **Connect Claude Code** command, for an install from a release. It calls
+  `src/install.ts`.
+- `src/install.ts`: registers the MCP server and the prompt hook with the shims, and removes them
+  again. The Connect command, `setup.ts` and `uninstall.ts` share it. `src/shell.ts` quotes a
+  command line for Windows.
 - `launcher.ts`: the stdio MCP server that Claude Code starts. It finds the window for its
   working directory and relays bytes to it.
 - `prompt-hook.ts`: the `UserPromptSubmit` hook. It adds the shared browser pages, the open
   images and the Markdown Editor selection to each prompt.
 - `setup.ts` (`npm run setup`): installs from a clone. The
-  `.claude/skills/install-vscode-tools-bridge/` skill runs it and makes the settings edits.
+  `.claude/skills/install-vscode-tools-bridge/` skill runs it and makes the `argv.json` edit.
+- `uninstall.ts`: the extension's `vscode:uninstall` script. VS Code runs it with plain Node when
+  the extension is uninstalled, and stops it after 5 seconds. It removes the shims and the
+  Claude Code registration and hook entry that point at them.
 - `test/`: see the "Tests" section.
 
 ## How it runs
@@ -33,8 +40,9 @@ and Claude Code at runtime so that Claude sees what the user has open.
   There is no bundler and no build output.
 - The code stays erasable TypeScript: no enums, namespaces, parameter properties or JSX.
   Imports name the `.ts` file.
-- `launcher.ts`, `prompt-hook.ts`, `setup.ts` and the files they import run in plain Node, so
-  they import nothing from `vscode`.
+- `launcher.ts`, `prompt-hook.ts`, `setup.ts`, `uninstall.ts` and the files they import run in
+  plain Node, so they import nothing from `vscode`. `src/bridgeServer.ts` does the same, so
+  an offline check can run it.
 - `npm run package` builds the VSIX with `vsce`. The VSIX bundles `node_modules`, so a runtime
   dependency goes in `dependencies`. `.vscodeignore` keeps tests and development files out.
 
@@ -69,11 +77,14 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
 
 - `npm run typecheck` runs `tsc` with no output files. A new top-level `.ts` file goes into the
   `include` list of `tsconfig.json`.
-- `npm test` runs three offline checks, `test/render-check.ts`, `test/glob-check.ts` and
-  `test/changelog-check.ts`, and then the end-to-end test, `test/run.ts`.
-- The end-to-end test downloads VS Code 1.138.0 into `.vscode-test/`. It starts it with its own
-  user data, extensions, discovery folder and Claude Code config, and calls every tool through
-  the launcher shim. The user's own VS Code and Claude Code config stay untouched.
+- `npm test` runs the offline checks, the `test/*-check.ts` files, and then the end-to-end test,
+  `test/run.ts`. The offline checks run on every platform. They use the small runner in
+  `test/harness.ts`, and start no VS Code.
+- The end-to-end test runs on Windows only, as CI does, because `test/window-helper.ps1` drives
+  the VS Code windows through Win32 and UI Automation. On another platform it stops at once with
+  a message. It downloads VS Code 1.138.0 into `.vscode-test/`. It starts it with its own user
+  data, extensions, discovery folder and Claude Code config, and calls the tools through the
+  launcher shim. The user's own VS Code and Claude Code config stay untouched.
 - `test/standin/` is an extension with Claude Code's ID, `anthropic.claude-code`. It plays
   Claude Code's chat webview, selection listener and chat-link handler, since the test cannot
   install Claude Code.
@@ -114,7 +125,7 @@ change needs a new version and which part to bump.
 Every version bump adds its section to `CHANGELOG.md` in the same commit:
 
 - The heading is `## [x.y.z] - YYYY-MM-DD`, newest first, followed by `### Added`, `### Changed`,
-  `### Fixed` or `### Removed` as needed.
+  `### Deprecated`, `### Removed`, `### Fixed` or `### Security` as needed.
 - Each bullet is one user-visible change in user terms, as in the README, with no internals.
 - A bullet is one line of at most 100 characters, counted after the `- `, Markdown included.
 - A change that users don't see, such as a test, a refactor or a doc edit, gets no entry.
