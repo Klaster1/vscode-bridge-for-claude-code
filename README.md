@@ -25,7 +25,6 @@ pages you share, so "this page" needs no more explanation.
 
 Limits:
 
-- `execute_command` asks you nothing before it runs a command.
 - VS Code asks you before Claude opens a page, navigates or runs Playwright code. Claude waits
   until you answer the dialog in the VS Code window.
 - `get_diagnostics` opens each file it checks in a background preview tab, because TypeScript checks only open files.
