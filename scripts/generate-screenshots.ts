@@ -197,7 +197,7 @@ const vscodeVersion = '1.138.0';
 const exe = await downloadAndUnzipVSCode({ version: vscodeVersion, cachePath: join(root, '.vscode-test') });
 // Installed from a VSIX, as users get it: --extensionDevelopmentPath would put "[Extension Development Host]" in the title.
 const vsix = join(run, 'vscode-tools-bridge.vsix');
-const packaged = spawnSync(process.execPath, [join(root, 'node_modules', '@vscode', 'vsce', 'vsce'), 'package', '--allow-missing-repository', '--allow-star-activation', '--skip-license', '--no-rewrite-relative-links', '--out', vsix], { cwd: root, encoding: 'utf8' });
+const packaged = spawnSync(process.execPath, [join(root, 'node_modules', '@vscode', 'vsce', 'vsce'), 'package', '--allow-missing-repository', '--allow-star-activation', '--no-rewrite-relative-links', '--out', vsix], { cwd: root, encoding: 'utf8' });
 if (packaged.status !== 0) {
 	throw new Error(`vsce package failed:\n${packaged.stdout}\n${packaged.stderr}`);
 }
