@@ -83,28 +83,25 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
 - `npm test` runs the offline checks, the `test/*-check.ts` files, and then the end-to-end test,
   `test/run.ts`. The offline checks run on every platform. They use the small runner in
   `test/harness.ts`, and start no VS Code.
-- The end-to-end test runs on Windows only, as CI does, because `test/window-helper.ps1` drives
-  the VS Code windows through Win32 and UI Automation. On another platform it stops at once with
-  a message. It downloads VS Code 1.140.0 into `.vscode-test/`. It starts it with its own user
+- `node test/docker.ts` runs `npm test` in the Linux container of `test/Dockerfile`, under a
+  virtual display of 1024×768. CI runs the same command, so a CI failure reproduces locally. It
+  needs Docker with Linux containers. The image holds the git-tracked files of the working tree,
+  with their uncommitted changes, and installs its own `node_modules`. A new file goes in once
+  `git add` tracks it. After the run, `.vscode-test/docker/` holds VS Code's logs, the dialog
+  log and, for a failed run, a screenshot of the window.
+- The end-to-end test runs on Linux only. On another platform it stops at once with a message.
+  It downloads VS Code 1.140.0 into `.vscode-test/`. It starts it with its own user
   data, extensions, discovery folder and Claude Code config, and calls the tools through the
-  plugin's launcher and prompt hook, with the command lines from the plugin's manifests. The user's
-  own VS Code and Claude Code config stay untouched.
+  plugin's launcher and prompt hook, with the command lines from the plugin's manifests. It
+  answers the confirmation dialogs and presses workbench buttons over the Chrome DevTools
+  Protocol, with Playwright. The user's own VS Code and Claude Code config stay untouched.
 - `test/standin/` is an extension with Claude Code's ID, `anthropic.claude-code`. It plays
   Claude Code's chat webview, selection listener and chat-link handler, since the test cannot
   install Claude Code.
-- In a terminal inside VS Code, or under Claude Code started from one, unset the variables VS
-  Code passes down. With them set, the dialog and "Share with Agent" checks can fail:
-
-  ```sh
-  env -u ELECTRON_RUN_AS_NODE -u VSCODE_IPC_HOOK_CLI -u VSCODE_PID -u VSCODE_CWD -u VSCODE_NLS_CONFIG -u VSCODE_HANDLES_UNCAUGHT_ERRORS -u VSCODE_ESM_ENTRYPOINT -u VSCODE_CODE_CACHE_PATH -u VSCODE_CRASH_REPORTER_PROCESS_TYPE npm test
-  ```
-
 - `claude plugin validate --strict plugin` and `claude plugin validate --strict .` check the
   plugin and the marketplace. CI runs both.
 - `BRIDGE_TEST_VSIX=<path>` tests a built VSIX instead of the source. The header of
-  `test/run.ts` lists the other variables.
-- The "toolbar Share with Agent button found" check runs on Windows only, and it is known to
-  flake. Run the test again before you look for a cause.
+  `test/run.ts` lists the other variables. `node test/docker.ts` passes them into the container.
 - Every user-visible feature or fix comes with a test that fails without it. Add an end-to-end
   check to `test/run.ts`, or an offline check like the ones `npm test` runs first.
 
@@ -165,10 +162,10 @@ tab. The release workflow uses the top section as the GitHub Release notes.
 
 `.github/workflows/ci.yml` has two jobs.
 
-- `test` runs on every pull request and every push to `main`, on a Windows runner, because the
-  end-to-end test drives real VS Code windows. It runs `npm ci`, `npm run typecheck`,
-  `claude plugin validate`, `npm test` and `npm run check-screenshots`, then builds the VSIX with
-  `npm run package` and uploads it. CI uses no tokens and never makes screenshots.
+- `test` runs on every pull request and every push to `main`, on a Linux runner. It runs
+  `npm ci`, `npm run typecheck`, `claude plugin validate`, `node test/docker.ts` and
+  `npm run check-screenshots`, then builds the VSIX with `npm run package` and uploads it. A
+  failed run uploads `.vscode-test/docker/`. CI uses no tokens and never makes screenshots.
 - `release` runs after `test` passes on a push to `main`. If the tag `v<version>` does not
   exist, it creates the tag on that commit and publishes a GitHub Release with the VSIX and the
   top `CHANGELOG.md` section.

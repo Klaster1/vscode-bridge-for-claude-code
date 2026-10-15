@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: windows-latest # test/window-helper.ps1 drives VS Code windows through Win32 and UI Automation.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -20,18 +20,6 @@ jobs:
           node-version: 24 # The Node line of VS Code 1.138's extension host. It runs the .ts files by type stripping, as the extension does.
           cache: npm
 
-      - name: Read the VS Code version the end-to-end test uses
-        id: vscode
-        run: |
-          $version = (Select-String -Path test/run.ts -Pattern "version: '([\d.]+)'").Matches[0].Groups[1].Value
-          if (-not $version) { throw 'No VS Code version found in test/run.ts' }
-          "version=$version" >> $env:GITHUB_OUTPUT
-
-      - uses: actions/cache@v6
-        with:
-          path: .vscode-test/vscode-*
-          key: vscode-${{ runner.os }}-${{ steps.vscode.outputs.version }}
-
       - run: npm ci
       - run: npm run typecheck
 
@@ -39,7 +27,7 @@ jobs:
         run: npm install --global @anthropic-ai/claude-code # Validating needs no sign-in.
       - name: Validate the Claude Code plugin and its marketplace
         run: claude plugin validate --strict plugin && claude plugin validate --strict .
-      - run: npm test
+      - run: node test/docker.ts
       - run: npm run check-screenshots
 
       - run: npm run package
@@ -49,24 +37,12 @@ jobs:
           path: '*.vsix'
           if-no-files-found: error
 
-      - name: Capture the screen
-        if: failure()
-        continue-on-error: true
-        run: |
-          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
-          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-          [System.Drawing.Graphics]::FromImage($bitmap).CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-          $bitmap.Save('screen.png')
-
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: test-logs
-          path: |
-            screen.png
-            .vscode-test/run/*.log
-            .vscode-test/run/user-data/logs/
+          path: .vscode-test/docker/
+          include-hidden-files: true # The folder is under .vscode-test, which upload-artifact skips by default as hidden.
           if-no-files-found: ignore
 
   release:

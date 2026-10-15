@@ -1,38 +1,38 @@
-// End-to-end check in an isolated VS Code, on Windows only: it needs test/window-helper.ps1,
-// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.140.0 into
+// End-to-end check in an isolated VS Code, on Linux only, under a display such as the Xvfb of
+// test/Dockerfile: `node test/docker.ts` runs it there on any machine. Downloads VS Code 1.140.0 into
 // .vscode-test/, starts it with its own user-data and extensions folders and
 // this extension loaded from source, then talks to the bridge through the Claude Code
 // plugin's launcher and prompt hook, with the command lines its manifests give Claude Code
 // (stdio MCP, cwd = workspace root). The user's own VS Code and Claude Code config are never touched.
+// It answers dialogs and presses workbench buttons over the Chrome DevTools Protocol.
 //
 //   node test/run.ts            (Node 22.18+), extension loaded from source
-//   BRIDGE_TEST_VSIX=path\to.vsix node test/run.ts   installs that VSIX into the
+//   BRIDGE_TEST_VSIX=path/to.vsix node test/run.ts   installs that VSIX into the
 //                                isolated extensions folder and tests it instead
 //   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeBridge.autoApprove and the
 //                                proposed API it needs; with BRIDGE_TEST_NO_CLICK=1
 //                                the browser tools must then run with no dialog
-//   BRIDGE_TEST_NO_CLICK=1       leaves the confirmation dialogs for a person
-//   BRIDGE_TEST_WINDOW=none      leaves the test window where VS Code puts it; the
-//                                default, offscreen, moves it away without activating it
+//   BRIDGE_TEST_NO_CLICK=1       leaves the confirmation dialogs unanswered
 //   BRIDGE_TEST_TRACE=1          starts VS Code with --log=trace
+//
+// A failed run leaves a screenshot of the window in .vscode-test/run/screen.png.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { connect } from 'node:net';
+import { connect, createServer as createNetServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } from '@vscode/test-electron';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { chromium, type Browser, type Page } from 'playwright';
 import { discoveryFile, type DiscoveryRecord } from '../plugin/scripts/discovery.ts';
-import { commandLine } from '../src/shell.ts';
-import { keepUrlHandler } from './url-handler.ts';
 
-if (process.platform !== 'win32') {
-	console.error('test/run.ts runs on Windows only. It starts VS Code windows and answers their dialogs with test/window-helper.ps1, which uses Win32 and UI Automation. CI runs it on Windows.');
+if (process.platform !== 'linux') {
+	console.error('test/run.ts runs on Linux only, as CI does. On another system, run it in Docker with node test/docker.ts.');
 	process.exit(1);
 }
 
@@ -64,6 +64,7 @@ const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.str
 	'chat.agent.enabled': true,
 	'workbench.browser.enableChatTools': true,
 	'vscodeBridge.executeCommand.deny': ['workbench.action.quit'],
+	'window.dialogStyle': 'custom', // Draws dialogs in the workbench page, where the test answers them. A native dialog on Linux is a GTK window, out of its reach.
 	'vscodeBridge.enabled': enabled,
 	'vscodeBridge.autoApprove': autoApprove,
 	...overrides,
@@ -80,7 +81,13 @@ await new Promise<void>(r => page.listen(0, '127.0.0.1', r));
 const pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}/`;
 
 const exe = await downloadAndUnzipVSCode({ version: '1.140.0', cachePath: join(root, '.vscode-test') });
-keepUrlHandler();
+// The port the test drives the window's pages through, with the Chrome DevTools Protocol.
+const cdpPort = await new Promise<number>(resolve => {
+	const probe = createNetServer().listen(0, '127.0.0.1', () => {
+		const { port } = probe.address() as AddressInfo;
+		probe.close(() => resolve(port));
+	});
+});
 // Drop variables inherited from a VS Code or Claude Code parent so the test
 // instance cannot mistake itself for a CLI call into the user's running VS Code.
 const env: NodeJS.ProcessEnv = {};
@@ -101,9 +108,10 @@ const vsix = process.env['BRIDGE_TEST_VSIX'];
 if (vsix) {
 	// Keep the CLI script path but replace its default user-data and extensions folders with ours.
 	const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(exe).filter(a => !/^--(user-data|extensions)-dir=/.test(a));
-	const installed = spawnSync(commandLine(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix]), { env, encoding: 'utf8', shell: true });
+	const installed = spawnSync(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix], { env, encoding: 'utf8' });
 	console.log(installed.stdout, installed.stderr);
 }
+const vscodeLog = openSync(join(run, 'vscode.log'), 'w');
 const code = spawn(exe, [
 	workspace,
 	join(workspace, 'src', 'greet.ts'), // An open editor, as after a reload: a panel opened beside it would add a group.
@@ -115,31 +123,56 @@ const code = spawn(exe, [
 	'--skip-welcome',
 	'--skip-release-notes',
 	'--new-window',
+	`--remote-debugging-port=${cdpPort}`,
+	// Chromium's sandbox needs user namespaces, which Docker's default seccomp profile blocks, or a
+	// setuid-root helper, which a download by a normal user is not. Without this flag VS Code aborts.
+	// No check depends on the sandbox.
+	'--no-sandbox',
 	...(autoApprove ? ['--enable-proposed-api=klaster1.vscode-bridge-for-claude-code'] : []),
 	...(process.env['BRIDGE_TEST_TRACE'] ? ['--log=trace'] : []),
-], { env, stdio: 'ignore' });
-
-// test/window-helper.ps1 keeps the test window out of the user's way and
-// answers the confirmation dialogs that tokenless tool calls raise, touching
-// only windows of this instance's main process. BRIDGE_TEST_WINDOW picks how
-// the window is kept away: offscreen (default; stays rendered, which
-// Playwright's click needs) or none.
-// BRIDGE_TEST_NO_CLICK=1 leaves dialogs for a person (or the 15 s timeout).
-const dialogLog = join(run, 'window-helper.log');
-const clicker = process.platform === 'win32' && code.pid
-	? spawn('powershell.exe', [
-		'-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'test', 'window-helper.ps1'),
-		'-ProcessId', String(code.pid), '-LogFile', dialogLog,
-		'-Hide', process.env['BRIDGE_TEST_WINDOW'] ?? 'offscreen',
-		...(process.env['BRIDGE_TEST_NO_CLICK'] ? ['-NoClick'] : []),
-	], { stdio: ['ignore', 'ignore', 'pipe'] })
-	: undefined;
-let clickerErrors = '';
-clicker?.stderr?.on('data', d => { clickerErrors += String(d); });
+], { env, stdio: ['ignore', vscodeLog, vscodeLog], detached: true }); // Its own process group, which the test kills at the end with every helper process VS Code starts.
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const results: { name: string; ok: boolean; note: string }[] = [];
 let client: Client | undefined;
+let cdp: Browser | undefined;
+
+const workbench = async (): Promise<Page> => {
+	cdp ??= await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+	for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
+		const found = cdp.contexts().flatMap(c => c.pages()).find(p => p.url().includes('workbench'));
+		if (found) {
+			return found;
+		}
+	}
+	throw new Error('no workbench page');
+};
+// Answers the confirmation dialogs that tokenless tool calls raise, with the first button that does
+// not decline, until the test ends. BRIDGE_TEST_NO_CLICK=1 leaves them to the 15 s timeout.
+const dialogLog = join(run, 'dialogs.log');
+let answering = !process.env['BRIDGE_TEST_NO_CLICK'];
+const answerDialogs = async () => {
+	while (answering) {
+		try {
+			const dialog = (await workbench()).locator('.monaco-dialog-box');
+			if (await dialog.count()) {
+				const message = (await dialog.locator('.dialog-message-text').allInnerTexts()).join(' | ');
+				const buttons = dialog.locator('.dialog-buttons .monaco-button');
+				const names = (await buttons.allInnerTexts()).map(n => n.trim());
+				const index = names.findIndex(n => n && !/^(Cancel|No|Close|Deny)$/.test(n));
+				if (index >= 0) {
+					await buttons.nth(index).click({ timeout: 5000 });
+					appendFileSync(dialogLog, `${new Date().toISOString()} dialog '${message}': pressed '${names[index]}' of ${JSON.stringify(names)}\n`);
+				}
+			}
+		} catch (e) {
+			// Usually the dialog closed while being read; the next pass sees the new state.
+			appendFileSync(dialogLog, `${new Date().toISOString()} dialog read failed: ${e instanceof Error ? e.message : String(e)}\n`);
+		}
+		await sleep(200);
+	}
+};
+let answered: Promise<void> | undefined;
 
 // Runs the plugin's prompt hook the way Claude Code runs a UserPromptSubmit hook: a
 // fresh process, the hook payload as JSON on stdin, cwd in the payload.
@@ -160,11 +193,16 @@ const hookContext = (stdout: string): string | undefined => {
 		return undefined;
 	}
 };
-// Presses a workbench button by accessible name, in the test instance only.
-const pressButton = (name: string) => spawnSync('powershell.exe', [
-	'-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'test', 'window-helper.ps1'),
-	'-ProcessId', String(code.pid), '-LogFile', join(run, 'invoke.log'), '-InvokeButton', name,
-], { encoding: 'utf8', timeout: 30_000 }).stdout.trim();
+// Clicks a workbench button by its accessible name, as a user does.
+const pressButton = async (name: string) => {
+	try {
+		await (await workbench()).getByRole('button', { name, exact: true }).click({ timeout: 10_000 });
+		return `pressed '${name}'`;
+	} catch (e) {
+		return `no button named '${name}': ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`;
+	}
+};
+let finished = false;
 try {
 	const file = discoveryFile(workspace);
 	// Off while the setting is off: wait for the extension to log that it stayed off, check
@@ -192,6 +230,7 @@ try {
 	}
 	const record = JSON.parse(readFileSync(file, 'utf8')) as DiscoveryRecord;
 	console.log(`Bridge up: ${record.pipe}`);
+	answered = answerDialogs();
 
 	// A client without the token must be dropped before it gets any MCP reply.
 	const rejected = await new Promise<string>(resolve => {
@@ -205,8 +244,18 @@ try {
 
 	client = new Client({ name: 'bridge-test', version: '0' });
 	await client.connect(new StdioClientTransport({ command: launcher.command, args: launcher.args, cwd: workspace, env: env as Record<string, string>, stderr: 'inherit' }));
-	const { tools } = await client.listTools();
+	// VS Code registers its own terminal and browser tools, which the bridge forwards, some time after
+	// the bridge starts. Listed too early, they are missing, and the checks of them would be skipped.
+	const vscodeTools = ['terminal_selection', 'terminal_last_command', 'open_browser_page', 'read_page', 'screenshot_page', 'navigate_page', 'click_element', 'hover_element', 'type_in_page', 'run_playwright_code', 'list_browser_pages', 'shared_browser_pages'];
+	let { tools } = await client.listTools();
+	for (const end = Date.now() + 60_000; vscodeTools.some(n => !tools.some(t => t.name === n)) && Date.now() < end; { tools } = await client.listTools()) {
+		await sleep(500);
+	}
 	console.log(`Tools (${tools.length}): ${tools.map(t => t.name).join(', ')}`);
+	{
+		const missing = vscodeTools.filter(n => !tools.some(t => t.name === n));
+		results.push({ name: 'the bridge serves VS Code\'s terminal and browser tools', ok: missing.length === 0, note: missing.length ? `missing after 60 s: ${missing.join(', ')}` : '' });
+	}
 
 	const call = async (name: string, args: Record<string, unknown>, timeoutMs = 45_000): Promise<CallToolResult> =>
 		await client!.callTool({ name, arguments: args }, undefined, { timeout: timeoutMs }) as CallToolResult;
@@ -377,7 +426,7 @@ try {
 				await sleep(1500);
 				const t = await tab();
 				await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
-				return via === route && t.kind === kind && (t.viewType ?? undefined) === viewType && t.uri?.endsWith(file.replace('/', '\\')) || `via ${via}, tab ${JSON.stringify(t)}`;
+				return via === route && t.kind === kind && (t.viewType ?? undefined) === viewType && t.uri?.endsWith(file.replaceAll('/', sep)) || `via ${via}, tab ${JSON.stringify(t)}`;
 			});
 		}
 		await check('showTextDocument with a TextDocument is not rejected', async () => {
@@ -459,7 +508,7 @@ try {
 		await call('execute_command', { command: 'standin.close' });
 
 		// The README's setting links reach the bridge as vscode:// links; --open-url hands one to this test instance only.
-		const openSettingsLink = (url: string) => spawnSync(exe, ['--open-url', url, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`], { env, timeout: 30_000 });
+		const openSettingsLink = (url: string) => spawnSync(exe, ['--open-url', url, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--no-sandbox'], { env, timeout: 30_000 });
 		const activeLabel = async () => (await tab() as { label?: string }).label;
 		const waitForLabel = async (label: string) => {
 			for (const end = Date.now() + 15_000; Date.now() < end; await sleep(500)) {
@@ -501,8 +550,8 @@ try {
 	// Browser. The page tools only see pages the agent opened with
 	// open_browser_page or that the user shared, and a page opened by command is
 	// not shared. open_browser_page, navigate_page and run_playwright_code ask for
-	// confirmation, which a tokenless call turns into a native modal dialog;
-	// window-helper.ps1 answers it. Those calls get 15 s, and a timeout is
+	// confirmation, which a tokenless call turns into a modal dialog;
+	// answerDialogs answers it. Those calls get 15 s, and a timeout is
 	// reported as waiting on the dialog, not as a failure.
 	const dialogTools: string[] = [];
 	const tryConfirming = async (name: string, args: Record<string, unknown>, pattern: RegExp): Promise<string | undefined> => {
@@ -551,8 +600,8 @@ try {
 	}
 	// A page the user opens and then shares with the toolbar's "Share with Agent"
 	// button, the way a person does it. The first share asks "Share with
-	// Agent?" (Allow/Deny), which window-helper.ps1 answers with Allow.
-	if (has('shared_browser_pages') && process.platform === 'win32') {
+	// Agent?" (Allow/Deny), which answerDialogs answers with Allow.
+	if (has('shared_browser_pages')) {
 		const userUrl = `${pageUrl}?shared-by-user`;
 		// The page counts as shared when it is in the listing's first section,
 		// "…currently shared with you…", which ends at the first blank line.
@@ -582,7 +631,7 @@ ${label}: ${changes.join(', ')}`);
 		await sleep(3000);
 		const before = runHook(workspace);
 		results.push({ name: 'prompt hook ignores an unshared page', ok: !(hookContext(before.stdout) ?? '').includes('shared-by-user'), note: `${before.ms} ms` });
-		const pressed = pressButton('Share with Agent');
+		const pressed = await pressButton('Share with Agent');
 		results.push({ name: 'toolbar Share with Agent button found', ok: pressed.startsWith('pressed'), note: pressed });
 		results.push({ name: 'page shared after Share with Agent + Allow', ok: await watchSharing('sharing state after Share with Agent', 6000), note: '' });
 		await expectText('list_browser_pages sees the user-shared page', 'list_browser_pages', {}, /shared with you[\s\S]*shared-by-user/);
@@ -597,7 +646,7 @@ ${after.stdout}`);
 		const sub = runHook(join(workspace, 'src'));
 		results.push({ name: 'prompt hook from a subfolder', ok: /shared-by-user/.test(hookContext(sub.stdout) ?? ''), note: `${sub.ms} ms` });
 		// Unsharing needs no confirmation; the button is now labelled for it.
-		const unpressed = pressButton('Stop Sharing with Agent');
+		const unpressed = await pressButton('Stop Sharing with Agent');
 		const stillShared = await watchSharing('sharing state after Stop Sharing with Agent', 5000);
 		const unshared = runHook(workspace);
 		results.push({ name: 'unshare with the same button', ok: unpressed.startsWith('pressed') && !stillShared && !(hookContext(unshared.stdout) ?? '').includes('shared-by-user'), note: unpressed });
@@ -609,18 +658,25 @@ ${after.stdout}`);
 	if (has('list_browser_pages') && dialogTools.includes('open_browser_page')) {
 		results.push({ name: 'page tools', ok: true, note: 'SKIPPED: no page, because the open_browser_page dialog was not answered' });
 	}
+	finished = true;
 } finally {
 	await client?.close().catch(() => undefined);
 	page.close();
-	clicker?.kill();
-	if (clickerErrors) {
-		console.log(`\nwindow-helper.ps1 errors:\n${clickerErrors}`);
+	answering = false;
+	await answered;
+	if (!finished || !results.every(r => r.ok)) {
+		await workbench().then(p => p.screenshot({ path: join(run, 'screen.png'), timeout: 10_000 })).catch((e: unknown) => console.log(`No screenshot: ${String(e)}`));
 	}
+	await cdp?.close().catch(() => undefined);
 	if (existsSync(dialogLog)) {
-		console.log(`\nwindow-helper.ps1 log:\n${readFileSync(dialogLog, 'utf8')}`);
+		console.log(`\nDialog log:\n${readFileSync(dialogLog, 'utf8')}`);
 	}
 	if (code.pid) {
-		spawnSync('taskkill', ['/pid', String(code.pid), '/T', '/F'], { stdio: 'ignore' });
+		try {
+			process.kill(-code.pid, 'SIGKILL');
+		} catch {
+			// Already gone.
+		}
 	}
 }
 
