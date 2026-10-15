@@ -153,6 +153,7 @@ const clicker = process.platform === 'win32' && code.pid
 		'-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'test', 'window-helper.ps1'),
 		'-ProcessId', String(code.pid), '-LogFile', dialogLog,
 		'-Hide', process.env['BRIDGE_TEST_WINDOW'] ?? 'offscreen',
+		'-Size', '1024x768', // The CI runner's screen size, so a local run lays the window out as CI does.
 		...(process.env['BRIDGE_TEST_NO_CLICK'] ? ['-NoClick'] : []),
 	], { stdio: ['ignore', 'ignore', 'pipe'] })
 	: undefined;
@@ -279,29 +280,56 @@ try {
 	/**
 	 * A point on a code line of the panel, in the workbench page's coordinates: before its first
 	 * character, after its last one, or in the middle of a word. A long line wraps in a narrow
-	 * panel, so each point is on the screen row of the character it is next to.
+	 * panel, so each point is on the screen row of the character it is next to. SemanticDiff
+	 * renders only the rows near the screen, so a point out of view is scrolled to: its line to
+	 * the top of the view for `scroll: 'top'`, the point to the middle otherwise. With
+	 * `scroll: 'none'` the point must be in view already.
 	 */
-	const linePoint = async (line: string, at: string) => {
+	const linePoint = async (line: string, at: string, scroll: 'top' | 'center' | 'none' = 'center') => {
 		const find = `(() => {
 			const norm = t => t.replace(/\\s+/g, ' ').trim();
 			const lines = [...document.querySelectorAll('.code-fg')];
 			const index = lines.findIndex(el => norm(el.textContent) === norm(${JSON.stringify(line)}));
-			if (index < 0) { return null; }
+			const header = document.getElementById('stickyHeader')?.getBoundingClientRect().bottom ?? 0;
+			const scroll = ${JSON.stringify(scroll)};
+			if (index < 0) {
+				// Not rendered: look further down, and from the top again at the end.
+				if (scroll === 'none') { return null; }
+				const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+				atEnd ? window.scrollTo(0, 0) : window.scrollBy(0, window.innerHeight / 2);
+				return null;
+			}
 			const box = lines[index].getBoundingClientRect();
+			if (scroll === 'top' && Math.abs(box.top - header - 8) > 2) {
+				const before = window.scrollY;
+				window.scrollBy(0, box.top - header - 8); // Below the sticky header, which covers the lines under it.
+				if (window.scrollY !== before) { return null; } // Else the page ends before the line reaches the top.
+			}
 			const nodes = [];
 			const walker = document.createTreeWalker(lines[index], NodeFilter.SHOW_TEXT);
 			for (let node; (node = walker.nextNode());) { if (node.data.length) { nodes.push(node); } }
 			const rect = (node, from, to) => { const r = document.createRange(); r.setStart(node, from); r.setEnd(node, to); const b = r.getBoundingClientRect(); return { left: b.left - box.left, right: b.right - box.left, y: b.top - box.top + b.height / 2 }; };
 			const at = ${JSON.stringify(at)};
-			if (at === 'start') { const r = rect(nodes[0], 0, 1); return { index, x: 1, y: r.y }; }
-			if (at === 'end') { const last = nodes[nodes.length - 1]; const r = rect(last, last.data.length - 1, last.data.length); return { index, x: Math.min(r.right + 3, box.width - 2), y: r.y }; }
-			for (const node of nodes) {
-				const i = node.data.indexOf(at);
-				if (i >= 0) { const r = rect(node, i, i + at.length); return { index, x: (r.left + r.right) / 2, y: r.y }; }
+			let point = null;
+			if (at === 'start') { const r = rect(nodes[0], 0, 1); point = { index, x: 1, y: r.y }; }
+			else if (at === 'end') { const last = nodes[nodes.length - 1]; const r = rect(last, last.data.length - 1, last.data.length); point = { index, x: Math.min(r.right + 3, box.width - 2), y: r.y }; }
+			else {
+				// A narrow panel breaks a word over two screen rows, and so over two text nodes: aim at its first character.
+				let i = nodes.map(n => n.data).join('').indexOf(at);
+				for (const node of nodes) {
+					if (i >= 0 && i < node.data.length) { const r = rect(node, i, i + 1); point = { index, x: (r.left + r.right) / 2, y: r.y }; break; }
+					i -= node.data.length;
+				}
 			}
-			return null;
+			// A wrapped line can be taller than the view, so only the point itself must be in view.
+			const y = point && box.top + point.y;
+			if (point && (y < header + 4 || y > window.innerHeight - 4)) {
+				if (scroll === 'center') { window.scrollBy(0, y - (header + window.innerHeight) / 2); }
+				return null;
+			}
+			return point;
 		})()`;
-		for (const end = Date.now() + 15_000; ; await sleep(500)) {
+		for (const end = Date.now() + 15_000; ; await sleep(250)) {
 			const { page, frame } = await semanticDiffFrame();
 			const found = await frame.evaluate(find).catch(() => null) as { index: number; x: number; y: number } | null;
 			const box = found && await frame.locator('.code-fg').nth(found.index).boundingBox().catch(() => null);
@@ -309,13 +337,16 @@ try {
 				return { page, x: box.x + found.x, y: box.y + found.y };
 			}
 			if (Date.now() > end) {
-				throw new Error(`no line "${line}" with "${at}" in the SemanticDiff panel`);
+				const shown = await (await semanticDiffFrame()).frame.evaluate(`[...document.querySelectorAll('.code-fg')].map(el => { const r = el.getBoundingClientRect(); return [...el.querySelectorAll('span')].map(n => n.textContent).join('|') + ' @' + Math.round(r.top) + '-' + Math.round(r.bottom) + ' of ' + window.innerHeight; })`).catch(() => []);
+				throw new Error(`no line "${line}" with "${at}" in view in the SemanticDiff panel; it shows ${JSON.stringify(shown)}`);
 			}
 		}
 	};
+	// The first line goes to the top of the view, so that the drag needs no scrolling.
 	const dragLines = async (from: string, to: string) => {
-		const a = await linePoint(from, 'start');
-		const b = await linePoint(to, 'end');
+		await linePoint(from, 'start', 'top');
+		const a = await linePoint(from, 'start', 'none');
+		const b = await linePoint(to, 'end', 'none');
 		await a.page.mouse.move(a.x, a.y);
 		await a.page.mouse.down();
 		await a.page.mouse.move(b.x, b.y, { steps: 5 });
@@ -484,6 +515,9 @@ try {
 
 	{
 		await expectText('semantic_diff_selection, no SemanticDiff panel in front', 'semantic_diff_selection', {}, /No SemanticDiff panel is in front/);
+		// The side bars leave SemanticDiff's code columns a few characters wide in a 1024×768 window.
+		await call('execute_command', { command: 'workbench.action.closeSidebar' });
+		await call('execute_command', { command: 'workbench.action.closeAuxiliaryBar' });
 		const diffSelectionNow = async () => textOf(await call('semantic_diff_selection', {}));
 		const until = async (done: (t: string) => boolean, ms = 20_000): Promise<string> => {
 			let t = await diffSelectionNow();
