@@ -1,14 +1,15 @@
 // Claude Code UserPromptSubmit hook: tells Claude what the user has in view in
 // the VS Code window of this session and Claude Code itself does not report:
 // integrated-browser pages shared with the agent, image files open in an editor
-// group, and text selected in the Markdown Editor unless it already reached the
-// Claude Code surface that runs this session (its selection chip, or the CLI).
+// group, and text selected in the Markdown Editor or a SemanticDiff diff unless it
+// already reached the Claude Code surface that runs this session (its selection
+// chip, or the CLI).
 // It runs before each prompt is sent.
 //
 // Reads the hook payload from stdin (JSON with the session's `cwd`), finds that
 // window's bridge the same way launcher.ts does, asks it over MCP for
-// shared_browser_pages without snapshots, for visible_images and for
-// markdown_editor_selection, and prints
+// shared_browser_pages without snapshots, for visible_images, for
+// markdown_editor_selection and for semantic_diff_selection, and prints
 // {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
 // "additionalContext": "..."}}, which Claude Code adds to the prompt. A hook
 // adds text only, so an image goes in as its path for Claude to read.
@@ -84,6 +85,7 @@ try {
 	const payload = JSON.parse(await readStdin()) as { cwd?: string };
 	const record = findRecord(payload.cwd ?? process.cwd());
 	if (record) {
+		const selectionArgs = { selectedOnly: true, ...(surface ? { skipDeliveredTo: surface } : {}) };
 		// The SDK server answers requests in order, so the initialize handshake
 		// and the calls can go out together.
 		const results = await mcpCall(record.pipe, record.token, [
@@ -91,8 +93,10 @@ try {
 			{ jsonrpc: '2.0', method: 'notifications/initialized' },
 			{ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'shared_browser_pages', arguments: { snapshot: false } } },
 			{ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'visible_images', arguments: {} } },
-			{ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'markdown_editor_selection', arguments: { selectedOnly: true, ...(surface ? { skipDeliveredTo: surface } : {}) } } },
-		], [2, 3, 4]);
+			{ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'markdown_editor_selection', arguments: selectionArgs } },
+			// A bridge older than this tool answers with an error, which adds nothing.
+			{ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'semantic_diff_selection', arguments: selectionArgs } },
+		], [2, 3, 4, 5]);
 		const sections: string[] = [];
 		const pages = textOf(results.get(2));
 		if (pages.includes('Page ID:')) {
@@ -122,6 +126,16 @@ try {
 				selections,
 				'',
 				'To see the text around a selection, read the file with the Read tool. The file on disk lacks any unsaved edits.',
+			].join('\n'));
+		}
+		const diffSelections = textOf(results.get(5));
+		if (diffSelections.startsWith('- ')) {
+			sections.push([
+				'Text the user has selected in a SemanticDiff diff in VS Code, one entry per editor group (this reflects the moment the prompt was sent):',
+				'',
+				diffSelections,
+				'',
+				'A selection on the modified side is in that file: read the file with the Read tool to see the text around it. A selection on the original side is in the original version the entry names, and its line numbers are that version\'s.',
 			].join('\n'));
 		}
 		if (sections.length) {

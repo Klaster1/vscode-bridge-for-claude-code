@@ -1,7 +1,8 @@
 // End-to-end check in an isolated VS Code, on Windows only: it needs test/window-helper.ps1,
 // which drives the windows through Win32 and UI Automation. Downloads VS Code 1.140.0 into
-// .vscode-test/, starts it with its own user-data and extensions folders and
-// this extension loaded from source, then talks to the bridge through the Claude Code
+// .vscode-test/, starts it with its own user-data and extensions folders,
+// this extension loaded from source and SemanticDiff 0.10.0 from the marketplace
+// (cached in .vscode-test/), then talks to the bridge through the Claude Code
 // plugin's launcher and prompt hook, with the command lines its manifests give Claude Code
 // (stdio MCP, cwd = workspace root). The user's own VS Code and Claude Code config are never touched.
 //
@@ -19,7 +20,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { connect } from 'node:net';
+import { connect, createServer as createNetServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +28,7 @@ import { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } from '
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { chromium, type Browser, type Frame, type Page } from 'playwright';
 import { discoveryFile, type DiscoveryRecord } from '../plugin/scripts/discovery.ts';
 import { commandLine } from '../src/shell.ts';
 import { keepUrlHandler } from './url-handler.ts';
@@ -81,6 +83,23 @@ const pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}/`;
 
 const exe = await downloadAndUnzipVSCode({ version: '1.140.0', cachePath: join(root, '.vscode-test') });
 keepUrlHandler();
+// SemanticDiff, for the checks of its diff panel's selection. Node's fetch decodes the marketplace's gzip-encoded response.
+const semanticDiffVsix = join(root, '.vscode-test', 'semanticdiff-0.10.0-win32-x64.vsix');
+if (!existsSync(semanticDiffVsix)) {
+	const response = await fetch('https://marketplace.visualstudio.com/_apis/public/gallery/publishers/semanticdiff/vsextensions/semanticdiff/0.10.0/vspackage?targetPlatform=win32-x64');
+	const data = Buffer.from(await response.arrayBuffer());
+	if (!response.ok || data.subarray(0, 2).toString() !== 'PK') {
+		throw new Error(`Downloading SemanticDiff failed: HTTP ${response.status}, ${data.length} bytes`);
+	}
+	writeFileSync(semanticDiffVsix, data);
+}
+// The port the test drives the window's pages through, with the Chrome DevTools Protocol.
+const cdpPort = await new Promise<number>(resolve => {
+	const probe = createNetServer().listen(0, '127.0.0.1', () => {
+		const { port } = probe.address() as AddressInfo;
+		probe.close(() => resolve(port));
+	});
+});
 // Drop variables inherited from a VS Code or Claude Code parent so the test
 // instance cannot mistake itself for a CLI call into the user's running VS Code.
 const env: NodeJS.ProcessEnv = {};
@@ -98,10 +117,11 @@ const launcher = inPlugin(pluginJson<{ mcpServers: Record<string, PluginCommand>
 const hook = inPlugin(pluginJson<{ hooks: Record<string, { hooks: PluginCommand[] }[]> }>('hooks/hooks.json').hooks['UserPromptSubmit']![0]!.hooks[0]!);
 env['CLAUDE_PLUGIN_ROOT'] = pluginRoot;
 const vsix = process.env['BRIDGE_TEST_VSIX'];
-if (vsix) {
+{
 	// Keep the CLI script path but replace its default user-data and extensions folders with ours.
 	const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(exe).filter(a => !/^--(user-data|extensions)-dir=/.test(a));
-	const installed = spawnSync(commandLine(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, '--install-extension', vsix]), { env, encoding: 'utf8', shell: true });
+	const installs = [semanticDiffVsix, ...(vsix ? [vsix] : [])].flatMap(file => ['--install-extension', file]);
+	const installed = spawnSync(commandLine(cli!, [...cliArgs, `--user-data-dir=${join(run, 'user-data')}`, `--extensions-dir=${join(run, 'extensions')}`, ...installs]), { env, encoding: 'utf8', shell: true });
 	console.log(installed.stdout, installed.stderr);
 }
 const code = spawn(exe, [
@@ -115,6 +135,7 @@ const code = spawn(exe, [
 	'--skip-welcome',
 	'--skip-release-notes',
 	'--new-window',
+	`--remote-debugging-port=${cdpPort}`,
 	...(autoApprove ? ['--enable-proposed-api=klaster1.vscode-bridge-for-claude-code'] : []),
 	...(process.env['BRIDGE_TEST_TRACE'] ? ['--log=trace'] : []),
 ], { env, stdio: 'ignore' });
@@ -140,6 +161,7 @@ clicker?.stderr?.on('data', d => { clickerErrors += String(d); });
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const results: { name: string; ok: boolean; note: string }[] = [];
 let client: Client | undefined;
+let cdp: Browser | undefined;
 
 // Runs the plugin's prompt hook the way Claude Code runs a UserPromptSubmit hook: a
 // fresh process, the hook payload as JSON on stdin, cwd in the payload.
@@ -230,6 +252,93 @@ try {
 	const has = (n: string) => tools.some(t => t.name === n);
 	// The selections the stand-in's text editor selection listener got for notes.md: what the CLI would get.
 	const cliSelections = async () => (JSON.parse(textOf(await call('execute_command', { command: 'standin.selections' }))) as { uri: string; text: string }[]).filter(s => s.uri.endsWith('notes.md'));
+	const cliDiffSelections = async () => (JSON.parse(textOf(await call('execute_command', { command: 'standin.selections' }))) as { uri: string; text: string }[]).filter(s => /[\\/]diff[\\/]/.test(s.uri));
+	type ChipPayload = { filePath: string; startLine: number; endLine: number; startColumn?: number; endColumn?: number; selectedText?: string };
+	const chipSelections = async (): Promise<(ChipPayload | undefined)[]> =>
+		(JSON.parse(textOf(await call('execute_command', { command: 'standin.received' }))) as { message?: { request?: { type?: string; selection?: ChipPayload } } }[])
+			.flatMap(m => m.message?.request?.type === 'selection_changed' ? [m.message.request.selection] : []);
+	const lf = (t: string | undefined) => t?.replaceAll('\r\n', '\n');
+
+	// SemanticDiff's diff panel draws its own selection, so the checks select with the mouse, through the Chrome DevTools Protocol.
+	const diffLines = (side: 'before' | 'after') => readFileSync(join(workspace, 'diff', `${side}.ts`), 'utf8').split(/\r?\n/);
+	const diffText = (side: 'before' | 'after', from: number, to: number) => diffLines(side).slice(from - 1, to).join('\n');
+	const semanticDiffFrame = async (): Promise<{ page: Page; frame: Frame }> => {
+		cdp ??= await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+		for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
+			for (const page of cdp.contexts().flatMap(c => c.pages())) {
+				for (const frame of page.frames()) {
+					if (await frame.locator('#new-path').count().catch(() => 0) && await frame.locator('.code-fg').count().catch(() => 0)) {
+						return { page, frame };
+					}
+				}
+			}
+		}
+		throw new Error('no SemanticDiff panel with code lines');
+	};
+	/**
+	 * A point on a code line of the panel, in the workbench page's coordinates: before its first
+	 * character, after its last one, or in the middle of a word. A long line wraps in a narrow
+	 * panel, so each point is on the screen row of the character it is next to.
+	 */
+	const linePoint = async (line: string, at: string) => {
+		const find = `(() => {
+			const norm = t => t.replace(/\\s+/g, ' ').trim();
+			const lines = [...document.querySelectorAll('.code-fg')];
+			const index = lines.findIndex(el => norm(el.textContent) === norm(${JSON.stringify(line)}));
+			if (index < 0) { return null; }
+			const box = lines[index].getBoundingClientRect();
+			const nodes = [];
+			const walker = document.createTreeWalker(lines[index], NodeFilter.SHOW_TEXT);
+			for (let node; (node = walker.nextNode());) { if (node.data.length) { nodes.push(node); } }
+			const rect = (node, from, to) => { const r = document.createRange(); r.setStart(node, from); r.setEnd(node, to); const b = r.getBoundingClientRect(); return { left: b.left - box.left, right: b.right - box.left, y: b.top - box.top + b.height / 2 }; };
+			const at = ${JSON.stringify(at)};
+			if (at === 'start') { const r = rect(nodes[0], 0, 1); return { index, x: 1, y: r.y }; }
+			if (at === 'end') { const last = nodes[nodes.length - 1]; const r = rect(last, last.data.length - 1, last.data.length); return { index, x: Math.min(r.right + 3, box.width - 2), y: r.y }; }
+			for (const node of nodes) {
+				const i = node.data.indexOf(at);
+				if (i >= 0) { const r = rect(node, i, i + at.length); return { index, x: (r.left + r.right) / 2, y: r.y }; }
+			}
+			return null;
+		})()`;
+		for (const end = Date.now() + 15_000; ; await sleep(500)) {
+			const { page, frame } = await semanticDiffFrame();
+			const found = await frame.evaluate(find).catch(() => null) as { index: number; x: number; y: number } | null;
+			const box = found && await frame.locator('.code-fg').nth(found.index).boundingBox().catch(() => null);
+			if (found && box) {
+				return { page, x: box.x + found.x, y: box.y + found.y };
+			}
+			if (Date.now() > end) {
+				throw new Error(`no line "${line}" with "${at}" in the SemanticDiff panel`);
+			}
+		}
+	};
+	const dragLines = async (from: string, to: string) => {
+		const a = await linePoint(from, 'start');
+		const b = await linePoint(to, 'end');
+		await a.page.mouse.move(a.x, a.y);
+		await a.page.mouse.down();
+		await a.page.mouse.move(b.x, b.y, { steps: 5 });
+		await a.page.mouse.up();
+	};
+	const openSemanticDiff = async () => {
+		await call('execute_command', { command: 'vscode.diff', args: [{ $uri: 'diff/before.ts' }, { $uri: 'diff/after.ts' }, 'before.ts vs after.ts'] });
+		await sleep(2000);
+		await call('execute_command', { command: 'semanticdiff.show' });
+		await linePoint(diffLines('after')[0]!, 'start');
+	};
+	// The SemanticDiff panel, then the diff it replaced.
+	const closeSemanticDiff = async () => {
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+	};
+	/** The chip posts once there are more than `count` and the last one passes `done`. */
+	const chipSelectionsAfter = async (count: number, done: (last: ChipPayload | undefined) => boolean = () => true) => {
+		let posts = await chipSelections();
+		for (const end = Date.now() + 20_000; !(posts.length > count && done(posts.at(-1))) && Date.now() < end; posts = await chipSelections()) {
+			await sleep(500);
+		}
+		return posts;
+	};
 	await check('the bridge starts with the layout it found', async () => {
 		const groups = textOf(await call('execute_command', { command: 'standin.groupCount' }));
 		return groups === '1' || `${groups} editor groups`;
@@ -364,6 +473,116 @@ try {
 	}
 
 	{
+		await expectText('semantic_diff_selection, no SemanticDiff panel in front', 'semantic_diff_selection', {}, /No SemanticDiff panel is in front/);
+		const diffSelectionNow = async () => textOf(await call('semantic_diff_selection', {}));
+		const until = async (done: (t: string) => boolean, ms = 20_000): Promise<string> => {
+			let t = await diffSelectionNow();
+			for (const end = Date.now() + ms; !done(t) && Date.now() < end; t = await diffSelectionNow()) {
+				await sleep(500);
+			}
+			return t;
+		};
+		await check('SemanticDiff opens its diff panel', async () => {
+			await openSemanticDiff();
+			return true;
+		});
+		await call('execute_command', { command: 'standin.open' }); // Its first post lets the bridge find it.
+		await sleep(3000);
+		const after = diffLines('after');
+		const before = diffLines('before');
+
+		// A drag over three lines of the modified side.
+		let count = (await chipSelections()).length;
+		await dragLines(after[3]!, after[5]!);
+		const modified = diffText('after', 4, 6);
+		const modifiedChip = (await chipSelectionsAfter(count, last => !!last?.selectedText)).at(-1);
+		await check('SemanticDiff: Claude Code webview receives a modified-side selection', async () =>
+			/[\\/]diff[\\/]after\.ts$/.test(modifiedChip?.filePath ?? '') && modifiedChip?.startLine === 4 && modifiedChip.endLine === 6
+			&& modifiedChip.startColumn === 0 && modifiedChip.endColumn === after[5]!.length && lf(modifiedChip.selectedText) === modified || JSON.stringify(modifiedChip).slice(0, 300));
+		await check('SemanticDiff: Claude Code CLI listener receives the modified-side selection', async () => {
+			const got = await cliDiffSelections();
+			return got.some(s => s.uri.endsWith('after.ts') && lf(s.text) === modified) || JSON.stringify(got).slice(0, 300);
+		});
+		const modifiedTool = await until(t => t.includes('shown in Claude Code'));
+		console.log(`\n--- semantic_diff_selection after a drag on the modified side ---\n${modifiedTool}`);
+		await check('semantic_diff_selection returns the modified-side lines and text', async () =>
+			/after\.ts \(active\), compared with \S*before\.ts, modified side, lines 4-6, shown in Claude Code's selection chip[^\n]*selected text:/.test(modifiedTool)
+			&& lf(modifiedTool)!.includes(`\n${modified}\n`) || modifiedTool.slice(0, 400));
+		{
+			const unconnected = hookContext(runHook(workspace, 'cli-without-vscode').stdout) ?? '';
+			results.push({ name: 'prompt hook reports a SemanticDiff selection', ok: /SemanticDiff/.test(unconnected) && unconnected.includes('modified side, lines 4-6') && unconnected.includes('sum += price * (1 - discount);'), note: unconnected.slice(0, 200) });
+			const chip = hookContext(runHook(workspace).stdout) ?? '';
+			results.push({ name: 'prompt hook skips a SemanticDiff selection the chip shows', ok: !chip.includes('SemanticDiff'), note: chip.slice(0, 200) });
+		}
+
+		// A drag over three lines of the original side.
+		count = (await chipSelections()).length;
+		await dragLines(before[3]!, before[5]!);
+		const original = diffText('before', 4, 6);
+		const originalChip = (await chipSelectionsAfter(count, last => /before\.ts$/.test(last?.filePath ?? '') && !!last?.selectedText)).at(-1);
+		await check('SemanticDiff: Claude Code webview receives an original-side selection with the original\'s lines', async () =>
+			/[\\/]diff[\\/]before\.ts$/.test(originalChip?.filePath ?? '') && originalChip?.startLine === 4 && originalChip.endLine === 6 && lf(originalChip.selectedText) === original || JSON.stringify(originalChip).slice(0, 300));
+		await check('SemanticDiff: Claude Code CLI listener receives the original-side selection', async () => {
+			const got = await cliDiffSelections();
+			return got.some(s => s.uri.endsWith('before.ts') && lf(s.text) === original) || JSON.stringify(got).slice(0, 300);
+		});
+		const originalTool = await until(t => t.includes('original side'));
+		console.log(`\n--- semantic_diff_selection after a drag on the original side ---\n${originalTool}`);
+		await check('semantic_diff_selection names the original side and its lines', async () =>
+			/original side, lines 4-6 of the original version, shown in Claude Code's selection chip[^\n]*selected text:/.test(originalTool) && lf(originalTool)!.includes(`\n${original}\n`) || originalTool.slice(0, 400));
+		{
+			const unconnected = hookContext(runHook(workspace, 'cli-without-vscode').stdout) ?? '';
+			results.push({ name: 'prompt hook names the original version of a SemanticDiff selection', ok: unconnected.includes('original side, lines 4-6 of the original version') && unconnected.includes('original version the entry names') && unconnected.includes('sum += price;'), note: unconnected.slice(0, 200) });
+		}
+
+		// A double-click selects a word.
+		count = (await chipSelections()).length;
+		{
+			const word = await linePoint(after[0]!, 'discount');
+			await word.page.mouse.dblclick(word.x, word.y);
+		}
+		const wordPosts = await chipSelectionsAfter(count, last => last?.selectedText === 'discount'); // The double-click's first click sends a cursor before the word.
+		await check('SemanticDiff: a double-click sends the word', async () => {
+			const w = wordPosts.at(-1);
+			return w?.selectedText === 'discount' && w.startLine === 1 && w.endLine === 1 && /after\.ts$/.test(w.filePath) || JSON.stringify(w).slice(0, 300);
+		});
+
+		// A click leaves a cursor.
+		count = wordPosts.length;
+		{
+			const at = await linePoint(after[8]!, 'currency');
+			await at.page.mouse.click(at.x, at.y);
+		}
+		const cursorPosts = await chipSelectionsAfter(count, last => last?.selectedText === undefined);
+		await check('SemanticDiff: a click reaches Claude Code as a cursor line', async () => {
+			const c = cursorPosts.at(-1);
+			return c?.startLine === 9 && c.endLine === 9 && c.selectedText === undefined && /after\.ts$/.test(c.filePath) || JSON.stringify(c).slice(0, 300);
+		});
+		const cursorTool = await until(t => t.includes('cursor on line'));
+		await check('semantic_diff_selection reports the cursor line when nothing is selected', async () =>
+			/after\.ts \(active\), compared with \S*before\.ts: nothing selected, cursor on line 9 of the modified version\./.test(cursorTool) || cursorTool.slice(0, 300));
+		{
+			const quiet = hookContext(runHook(workspace, 'cli-without-vscode').stdout) ?? '';
+			results.push({ name: 'prompt hook adds nothing for a SemanticDiff cursor', ok: !quiet.includes('SemanticDiff'), note: quiet.slice(0, 200) });
+		}
+
+		// Focus the stand-in's group and come back: Claude Code may have cleared its chip meanwhile.
+		{
+			const word = await linePoint(after[0]!, 'discount');
+			await word.page.mouse.dblclick(word.x, word.y);
+		}
+		const beforeRefocus = (await chipSelectionsAfter(cursorPosts.length, last => last?.selectedText === 'discount')).length;
+		await call('execute_command', { command: 'workbench.action.focusSecondEditorGroup' });
+		await call('execute_command', { command: 'workbench.action.focusFirstEditorGroup' });
+		const refocused = await chipSelectionsAfter(beforeRefocus);
+		await check('a SemanticDiff panel coming to the front sends its selection again', async () =>
+			refocused.length > beforeRefocus && refocused.at(-1)?.selectedText === 'discount' || `${beforeRefocus} -> ${refocused.length} posts`);
+		await call('execute_command', { command: 'standin.close' });
+		await closeSemanticDiff();
+		await expectText('semantic_diff_selection, panel closed', 'semantic_diff_selection', {}, /No SemanticDiff panel is in front/);
+	}
+
+	{
 		// Chat links. Claude Code (here the stand-in) opens a link with showTextDocument(uri) and falls back to
 		// vscode.open only when that rejects; the bridge makes it reject for a file that opens in a custom editor.
 		const tab = async () => JSON.parse(textOf(await call('execute_command', { command: 'standin.activeTab' }))) as { kind: string; viewType?: string; uri?: string };
@@ -444,6 +663,26 @@ try {
 			const h = runHook(workspace);
 			results.push({ name: 'Markdown Editor selection off: the prompt hook adds nothing', ok: h.status === 0 && !(hookContext(h.stdout) ?? '').includes('Markdown Editor'), note: `${h.ms} ms` });
 		}
+		{
+			// The same setting covers SemanticDiff's panel.
+			const postsBeforeDiff = await postsToClaude();
+			const cliBeforeDiff = (await cliDiffSelections()).length;
+			await openSemanticDiff();
+			await dragLines(diffLines('after')[3]!, diffLines('after')[5]!);
+			await sleep(3000);
+			await check('SemanticDiff selection off: the tool reads nothing', async () => {
+				const t = textOf(await call('semantic_diff_selection', {}));
+				return /not being read/.test(t) || t.slice(0, 300);
+			});
+			await check('SemanticDiff selection off: nothing reaches Claude Code', async () => {
+				const after = await postsToClaude();
+				const cliAfter = (await cliDiffSelections()).length;
+				return after === postsBeforeDiff && cliAfter === cliBeforeDiff || `${postsBeforeDiff} -> ${after} chip posts, ${cliBeforeDiff} -> ${cliAfter} CLI selections`;
+			});
+			const h = runHook(workspace, 'cli-without-vscode');
+			results.push({ name: 'SemanticDiff selection off: the prompt hook adds nothing', ok: h.status === 0 && !(hookContext(h.stdout) ?? '').includes('SemanticDiff'), note: `${h.ms} ms` });
+			await closeSemanticDiff();
+		}
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		await call('execute_command', { command: 'standin.close' });
 		await setSetting('markdownEditor.selection', true);
@@ -456,6 +695,23 @@ try {
 			return /lines 1-\d+, shown in Claude Code's selection chip[^\n]*selected text:/.test(t) && after > postsBefore || `${t.slice(0, 200)}; ${postsBefore} -> ${after} posts`;
 		});
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		{
+			const postsBeforeDiff = await postsToClaude();
+			await openSemanticDiff();
+			await dragLines(diffLines('after')[3]!, diffLines('after')[5]!);
+			const t = await (async () => {
+				let text = '';
+				for (const end = Date.now() + 20_000; Date.now() < end && !text.includes('shown in Claude Code'); await sleep(500)) {
+					text = textOf(await call('semantic_diff_selection', {}));
+				}
+				return text;
+			})();
+			await check('SemanticDiff selection on again: the tool and Claude Code get the selection', async () => {
+				const after = await postsToClaude();
+				return /modified side, lines 4-6, shown in Claude Code's selection chip[^\n]*selected text:/.test(t) && after > postsBeforeDiff || `${t.slice(0, 200)}; ${postsBeforeDiff} -> ${after} posts`;
+			});
+			await closeSemanticDiff();
+		}
 		await call('execute_command', { command: 'standin.close' });
 
 		// The README's setting links reach the bridge as vscode:// links; --open-url hands one to this test instance only.
@@ -610,6 +866,7 @@ ${after.stdout}`);
 		results.push({ name: 'page tools', ok: true, note: 'SKIPPED: no page, because the open_browser_page dialog was not answered' });
 	}
 } finally {
+	await cdp?.close().catch(() => undefined); // Disconnects; VS Code stops with taskkill below.
 	await client?.close().catch(() => undefined);
 	page.close();
 	clicker?.kill();
