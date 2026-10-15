@@ -1,28 +1,12 @@
 // Reads the selection in VS Code's rich Markdown Editor (the custom editor
-// vscode.markdown.editor). VS Code has no API for it, so this patches the `html`
-// setter that every extension's webviews share. For the Markdown Editor's page
-// it inserts one script, which wraps acquireVsCodeApi so that the editor's
-// setState calls, made on every selection change, also post the selection's
-// offsets into the Markdown source to this extension. The script reads nothing
-// else from the page.
-//
-// The same prototype's `postMessage` is wrapped to find Claude Code's chat
-// webviews, which Claude Code feeds with `selection_changed` messages for its
-// selection chip. The Markdown Editor's selection goes to them in that format.
-// The format is Claude Code's internal one and can change with its updates.
-//
-// The Claude Code CLI, connected to VS Code with /ide, gets text editors'
-// selections from the listeners Claude Code registers with
-// window.onDidChangeTextEditorSelection. That method is wrapped on the same API
-// object to collect those listeners, and a Markdown Editor's selection is
-// passed to them as if a text editor had changed it. The wrapper must be in
-// place before Claude Code subscribes, so the extension activates at startup.
-//
-// Whatever the patch relies on and cannot find is logged once, and the part
-// that needs it stays off. No error reaches the Markdown extension.
+// vscode.markdown.editor), as a page handler of webviewSelection.ts. For the
+// Markdown Editor's page it inserts one script, which wraps acquireVsCodeApi so
+// that the editor's setState calls, made on every selection change, also post
+// the selection's offsets into the Markdown source to this extension. The
+// script reads nothing else from the page.
 
 import * as vscode from 'vscode';
-import { claudeCodeApi } from './claudeApi.ts';
+import { deliver, delivered, reporter, type Delivered, type PageHandler } from './webviewSelection.ts';
 
 const viewType = 'vscode.markdown.editor';
 const messageType = 'vscodeBridge.markdownSelection';
@@ -47,19 +31,7 @@ interface MarkdownEditorState {
 	active: boolean;
 	/** Absent when the editor has not reported a selection. Lines are 1-based; an empty `text` means a cursor. */
 	selection?: { startLine: number; endLine: number; text: string };
-	/** Where the selection has reached Claude Code: its chat panel's chip, and the CLI connected through /ide. */
-	delivered: { chip: boolean; cli: boolean };
-}
-
-/** Claude Code's selection payload, as it builds one for a text editor. */
-interface ChipSelection {
-	filePath: string;
-	sourceUri: string;
-	startLine: number;
-	endLine: number;
-	startColumn?: number;
-	endColumn?: number;
-	selectedText?: string;
+	delivered: Delivered;
 }
 
 const forwarder = `(() => {
@@ -78,26 +50,8 @@ const forwarder = `(() => {
 })();`;
 
 const editors = new Map<vscode.Webview, Editor>();
-const reported = new Set<string>();
-/** Claude Code's chat webviews, found by the messages the extension posts to them. */
-const claudeWebviews = new Set<vscode.Webview>();
-/** The editor and offsets behind the chip; cleared when a text editor takes the chip over. */
-let chip: { editor: Editor; offsets: string } | undefined;
-/** The listeners Claude Code registered for text editor selections; the CLI's selection comes from them. */
-const selectionListeners = new Set<(event: vscode.TextEditorSelectionChangeEvent) => unknown>();
-/** The editor and offsets the CLI last got; cleared when a text editor's selection changes. */
-let cli: { editor: Editor; offsets: string } | undefined;
-let postToWebview: ((webview: vscode.Webview, message: unknown) => Thenable<boolean>) | undefined;
 let clock = 0;
-let running = false;
-let report: (message: string) => void = () => undefined;
-
-function reportOnce(key: string, message: string): void {
-	if (!reported.has(key)) {
-		reported.add(key);
-		report(`Markdown Editor selection: ${message}`);
-	}
-}
+const reportOnce = reporter('Markdown Editor selection');
 
 const markdownTabUris = (frontOnly: boolean): vscode.Uri[] =>
 	vscode.window.tabGroups.all.flatMap(group => (frontOnly ? [group.activeTab] : group.tabs).flatMap(tab =>
@@ -172,80 +126,18 @@ function rangeOf(doc: vscode.TextDocument, offsets: Offsets): vscode.Range {
 	return a.isBefore(b) ? new vscode.Range(a, b) : new vscode.Range(b, a);
 }
 
-/** Gives the selection to Claude Code's selection listeners, as if a text editor had changed it, for the CLI. */
-function feedListeners(editor: Editor, doc: vscode.TextDocument, offsets: Offsets): void {
-	if (!selectionListeners.size) {
-		reportOnce('cli', 'no Claude Code selection listener found, so the CLI gets no selection; Claude Code may have subscribed before the bridge started, and the prompt hook note carries the selection.');
-		return;
+function deliverEditor(editor: Editor): Promise<void> {
+	const { selection, uri } = editor;
+	if (!selection || !uri) {
+		return Promise.resolve();
 	}
-	const selection = new vscode.Selection(doc.positionAt(offsets.anchor), doc.positionAt(offsets.active));
-	const event = { textEditor: { document: doc, selection, selections: [selection] }, selections: [selection], kind: undefined };
-	let fed = false;
-	for (const listener of [...selectionListeners]) {
-		try {
-			Promise.resolve(listener(event as unknown as vscode.TextEditorSelectionChangeEvent)).catch(err => reportOnce('listener', `a Claude Code listener failed: ${err instanceof Error ? err.message : String(err)}`));
-			fed = true;
-		} catch (err) {
-			reportOnce('listener', `a Claude Code listener failed: ${err instanceof Error ? err.message : String(err)}`);
-		}
-	}
-	if (fed && editor.selection === offsets) {
-		cli = { editor, offsets: offsetsKey(offsets) };
-	}
-}
-
-/** Gives a selection to Claude Code: the CLI through its listeners, and its chat panel's chip by posting to every webview as Claude Code does. */
-async function deliver(editor: Editor): Promise<void> {
-	try {
-		const { selection, uri } = editor;
-		if (!selection || !uri) {
-			return;
-		}
+	return deliver(editor, offsetsKey(selection), async () => {
 		const doc = await vscode.workspace.openTextDocument(uri);
 		if (editor.selection !== selection) {
-			return; // A newer selection is on its way.
+			return undefined; // A newer selection is on its way.
 		}
-		feedListeners(editor, doc, selection);
-		if (!postToWebview) {
-			return;
-		}
-		const range = rangeOf(doc, selection);
-		const base = { filePath: doc.fileName, sourceUri: doc.uri.toString(), startLine: range.start.line + 1 };
-		let payload: ChipSelection | undefined;
-		if (!range.isEmpty) {
-			payload = { ...base, endLine: range.end.line + 1, startColumn: range.start.character, endColumn: range.end.character, selectedText: doc.getText(range) };
-		} else if (vscode.workspace.getConfiguration('claudeCode').get<boolean>('attachOpenFile') ?? true) {
-			payload = { ...base, endLine: base.startLine }; // With the setting off, Claude Code keeps no chip for a cursor.
-		}
-		const targets = [...claudeWebviews];
-		if (!targets.length) {
-			reportOnce('chip', 'no Claude Code webview found yet; the prompt hook note carries the selection.');
-			return;
-		}
-		const message = { type: 'from-extension', message: { type: 'request', channelId: '', requestId: '', request: { type: 'selection_changed', selection: payload } } };
-		const posted = await Promise.all(targets.map(async webview => {
-			try {
-				if (await postToWebview!(webview, message)) {
-					return true;
-				}
-			} catch {
-				// Dropped below.
-			}
-			claudeWebviews.delete(webview);
-			return false;
-		}));
-		if (posted.some(Boolean) && editor.selection === selection) {
-			chip = { editor, offsets: offsetsKey(selection) };
-		}
-	} catch (err) {
-		reportOnce('chip', `posting the selection to Claude Code failed: ${err instanceof Error ? err.message : String(err)}`);
-	}
-}
-
-/** Claude Code posts `{ type: 'from-extension', message: { type, ... } }` to its chat webviews. */
-function isClaudeMessage(message: unknown): boolean {
-	const inner = (message as { type?: unknown; message?: { type?: unknown } } | null)?.message;
-	return (message as { type?: unknown } | null)?.type === 'from-extension' && typeof inner === 'object' && typeof inner?.type === 'string';
+		return { doc, selection: new vscode.Selection(doc.positionAt(selection.anchor), doc.positionAt(selection.active)) };
+	}, () => editor.selection === selection);
 }
 
 /** Returns the HTML to set, with the script inserted when the page is the Markdown Editor's. */
@@ -282,7 +174,7 @@ function patchPage(webview: vscode.Webview, html: string): string {
 					editor.selection = selection ?? undefined;
 					editor.updated = ++clock;
 					if (resolve(editor) && changed && editor.selection && isActiveTab(editor.uri)) {
-						void deliver(editor);
+						void deliverEditor(editor);
 					}
 				}
 			} catch (err) {
@@ -295,173 +187,33 @@ function patchPage(webview: vscode.Webview, html: string): string {
 	return html.replace('<head>', () => `<head><script nonce="${nonce}">${forwarder}</script>`);
 }
 
-function findOwner(start: object | null, name: string): { owner: object; descriptor: PropertyDescriptor } | undefined {
-	for (let owner = start; owner; owner = Object.getPrototypeOf(owner)) {
-		const descriptor = Object.getOwnPropertyDescriptor(owner, name);
-		if (descriptor) {
-			return { owner, descriptor };
+// Claude Code may have cleared its chip while another tab was in front, so a Markdown Editor that comes to the front sends its selection again.
+let frontUri: string | undefined;
+
+export const markdownEditorPage: PageHandler = {
+	matches: html => html.includes('vscode-markdown-editor-message-secret'),
+	patch: patchPage,
+	tabsChanged(closed) {
+		if (closed) {
+			prune();
 		}
-	}
-	return undefined;
-}
-
-/**
- * Starts reading Markdown Editor selections; dispose to restore the `html`
- * setter and `postMessage`. A webview shows the patched page for as long as it lives.
- */
-export function installMarkdownSelection(log: (message: string) => void): vscode.Disposable {
-	report = log;
-	// Every extension's webviews share one prototype, so a throwaway panel gives access to the setter the Markdown extension uses. It opens in the active group: a new group would stay behind when workbench.editor.closeEmptyGroups is off.
-	const panel = vscode.window.createWebviewPanel('vscodeBridge.probe', 'VS Code Bridge for Claude Code', { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {});
-	const prototype: object | null = Object.getPrototypeOf(panel.webview);
-	panel.dispose();
-	const html = findOwner(prototype, 'html');
-	const originalSet = html?.descriptor.set;
-	if (!html || !originalSet || !html.descriptor.configurable) {
-		reportOnce('setter', 'the webview has no configurable html setter; the selection is not read.');
-		return { dispose: () => undefined };
-	}
-	const { owner, descriptor } = html;
-	let active = true;
-	const patched: PropertyDescriptor = {
-		...descriptor,
-		set(this: vscode.Webview, value: unknown) {
-			let page = value;
-			if (active && typeof value === 'string' && value.includes('vscode-markdown-editor-message-secret')) {
-				try {
-					page = patchPage(this, value);
-				} catch (err) {
-					reportOnce('patch', `patching the page failed: ${err instanceof Error ? err.message : String(err)}`);
-				}
-			}
-			originalSet.call(this, page);
-		},
-	};
-	Object.defineProperty(owner, 'html', patched);
-	running = true;
-
-	const post = findOwner(prototype, 'postMessage');
-	const originalPost = post?.descriptor.value as ((this: vscode.Webview, message: unknown) => Thenable<boolean>) | undefined;
-	let patchedPost: PropertyDescriptor | undefined;
-	if (post && typeof originalPost === 'function' && post.descriptor.configurable && post.descriptor.writable) {
-		postToWebview = (webview, message) => originalPost.call(webview, message);
-		patchedPost = {
-			...post.descriptor,
-			value(this: vscode.Webview, message: unknown) {
-				let result: Thenable<boolean>;
-				try {
-					result = originalPost.call(this, message);
-				} catch (err) {
-					claudeWebviews.delete(this);
-					throw err;
-				}
-				if (active && isClaudeMessage(message)) {
-					claudeWebviews.add(this);
-					// A webview that is not live resolves false; it is added again by its next message.
-					Promise.resolve(result).then(delivered => delivered === false && claudeWebviews.delete(this), () => claudeWebviews.delete(this));
-				}
-				return result;
-			},
-		};
-		Object.defineProperty(post.owner, 'postMessage', patchedPost);
-	} else {
-		reportOnce('postMessage', 'the webview has no writable postMessage method; Claude Code\'s selection chip is not fed.');
-	}
-
-	// Collects the selection listeners Claude Code registers from here on; registration still goes through the original.
-	const claude = claudeCodeApi();
-	const claudeWindow = typeof claude === 'string' ? undefined : claude.window;
-	const listenDescriptor = claudeWindow && Object.getOwnPropertyDescriptor(claudeWindow, 'onDidChangeTextEditorSelection');
-	let restoreListen: (() => void) | undefined;
-	if (claudeWindow && listenDescriptor && typeof listenDescriptor.value === 'function' && listenDescriptor.writable && listenDescriptor.configurable) {
-		const originalListen = listenDescriptor.value as (listener: (e: vscode.TextEditorSelectionChangeEvent) => unknown, thisArgs?: unknown) => vscode.Disposable;
-		const patchedListen: PropertyDescriptor = {
-			...listenDescriptor,
-			value(this: unknown, listener: (e: vscode.TextEditorSelectionChangeEvent) => unknown, thisArgs?: unknown, subscriptions?: vscode.Disposable[]) {
-				if (typeof listener !== 'function') {
-					return originalListen.apply(this, arguments as never);
-				}
-				const bound = thisArgs === undefined ? listener : listener.bind(thisArgs);
-				const subscription = originalListen.call(this, listener, thisArgs);
-				if (active) {
-					selectionListeners.add(bound);
-				}
-				const wrapped = new vscode.Disposable(() => {
-					selectionListeners.delete(bound);
-					subscription.dispose();
-				});
-				subscriptions?.push(wrapped);
-				return wrapped;
-			},
-		};
-		Object.defineProperty(claudeWindow, 'onDidChangeTextEditorSelection', patchedListen);
-		restoreListen = () => {
-			// Another extension may have wrapped it since; leave its wrapper in place.
-			if (Object.getOwnPropertyDescriptor(claudeWindow, 'onDidChangeTextEditorSelection')?.value === patchedListen.value) {
-				Object.defineProperty(claudeWindow, 'onDidChangeTextEditorSelection', listenDescriptor);
-			}
-		};
-	} else {
-		reportOnce('listen', `could not wrap onDidChangeTextEditorSelection on Claude Code's API object (${typeof claude === 'string' ? claude : 'not replaceable'}); the CLI gets no selection.`);
-	}
-
-	const disposables = [
-		// Claude Code replaces the chip with a text editor's selection on these events.
-		vscode.window.onDidChangeActiveTextEditor(editor => { chip = editor ? undefined : chip; }),
-		vscode.window.onDidChangeTextEditorSelection(e => {
-			chip = e.textEditor === vscode.window.activeTextEditor ? undefined : chip;
-			cli = undefined; // The CLI's listener takes every text editor's selection.
-		}),
-	];
-	// Claude Code may have cleared its chip while another tab was in front, so a Markdown Editor that comes to the front sends its selection again.
-	let frontUri: string | undefined;
-	const onTabs = () => {
 		const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
 		const uri = input instanceof vscode.TabInputCustom && input.viewType === viewType ? input.uri.toString() : undefined;
 		if (uri && uri !== frontUri) {
 			const newest = [...editors.values()].filter(e => resolve(e)?.toString() === uri && e.selection).sort((a, b) => b.updated - a.updated)[0];
 			if (newest) {
-				void deliver(newest);
+				void deliverEditor(newest);
 			}
 		}
 		frontUri = uri;
-	};
-	disposables.push(
-		vscode.window.tabGroups.onDidChangeTabs(e => {
-			if (e.closed.length) {
-				prune();
-			}
-			onTabs();
-		}),
-		vscode.window.tabGroups.onDidChangeTabGroups(onTabs),
-	);
-	return {
-		dispose() {
-			active = false;
-			running = false;
-			disposables.forEach(d => d.dispose());
-			for (const editor of [...editors.values()]) {
-				forget(editor);
-			}
-			claudeWebviews.clear();
-			selectionListeners.clear();
-			chip = undefined;
-			cli = undefined;
-			postToWebview = undefined;
-			// Another extension may have wrapped a method since; leave its wrapper in place, which now passes calls through.
-			if (Object.getOwnPropertyDescriptor(owner, 'html')?.set === patched.set) {
-				Object.defineProperty(owner, 'html', descriptor);
-			}
-			restoreListen?.();
-			if (post && patchedPost && Object.getOwnPropertyDescriptor(post.owner, 'postMessage')?.value === patchedPost.value) {
-				Object.defineProperty(post.owner, 'postMessage', post.descriptor);
-			}
-		},
-	};
-}
-
-/** Whether the patch is installed; without it no selection is read. */
-export const markdownSelectionRunning = (): boolean => running;
+	},
+	clear() {
+		for (const editor of [...editors.values()]) {
+			forget(editor);
+		}
+		frontUri = undefined;
+	},
+};
 
 /** The Markdown Editor in front of each editor group, with its selection. */
 export async function markdownEditorSelections(): Promise<MarkdownEditorState[]> {
@@ -486,8 +238,7 @@ export async function markdownEditorSelections(): Promise<MarkdownEditorState[]>
 					endLine: (end.line > start.line && end.character === 0 ? end.line - 1 : end.line) + 1,
 					text: doc.getText(new vscode.Range(start, end)),
 				};
-				const key = offsetsKey(newest.selection);
-				state.delivered = { chip: chip?.editor === newest && chip.offsets === key, cli: cli?.editor === newest && cli.offsets === key };
+				state.delivered = delivered(newest, offsetsKey(newest.selection));
 			} catch (err) {
 				reportOnce('read', `reading ${input.uri.toString()} failed: ${err instanceof Error ? err.message : String(err)}`);
 			}

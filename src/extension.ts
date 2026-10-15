@@ -14,8 +14,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { createBridgeListener } from './bridgeServer.ts';
 import { installChatLinks } from './chatLinks.ts';
 import { serverInstructions } from './instructions.ts';
-import { installMarkdownSelection } from './markdownSelection.ts';
+import { markdownEditorPage } from './markdownSelection.ts';
 import { allTools } from './tools.ts';
+import { installWebviewSelection } from './webviewSelection.ts';
 
 let log: vscode.LogOutputChannel;
 const patches = new Map<string, vscode.Disposable>();
@@ -72,7 +73,7 @@ const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeBridge
 
 /** The runtime patches, each switched by its own setting. */
 const patchSettings: [setting: string, install: (report: (message: string) => void) => vscode.Disposable][] = [
-	['markdownEditor.selection', installMarkdownSelection],
+	['markdownEditor.selection', report => installWebviewSelection(report, [markdownEditorPage])],
 	['claudeCode.chatLinks', installChatLinks],
 ];
 

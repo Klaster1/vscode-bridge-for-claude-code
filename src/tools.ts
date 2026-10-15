@@ -4,8 +4,10 @@
 
 import * as vscode from 'vscode';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
-import { markdownEditorSelections, markdownSelectionRunning } from './markdownSelection.ts';
+import { markdownEditorSelections } from './markdownSelection.ts';
+import { semanticDiffSelections } from './semanticDiffSelection.ts';
 import { safeStringify, toolResultToContent } from './render.ts';
+import { webviewSelectionRunning } from './webviewSelection.ts';
 
 type Args = Record<string, unknown>;
 
@@ -519,7 +521,7 @@ const markdownEditorSelectionTool: BridgeTool = {
 		},
 	},
 	async call(args) {
-		if (!markdownSelectionRunning()) {
+		if (!webviewSelectionRunning()) {
 			return text('The Markdown Editor selection is not being read: vscodeBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the editor.');
 		}
 		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
