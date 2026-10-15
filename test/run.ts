@@ -290,19 +290,25 @@ try {
 			const norm = t => t.replace(/\\s+/g, ' ').trim();
 			const lines = [...document.querySelectorAll('.code-fg')];
 			const index = lines.findIndex(el => norm(el.textContent) === norm(${JSON.stringify(line)}));
-			const header = document.getElementById('stickyHeader')?.getBoundingClientRect().bottom ?? 0;
+			// While the button is down, SemanticDiff scrolls the page when the pointer is within 100 px of its top or bottom,
+			// and the text under the pointer moves. The points stay out of those bands, unless the page cannot scroll that
+			// way, and out from under the sticky header.
+			const header = (document.getElementById('stickyHeader')?.getBoundingClientRect().bottom ?? 0) + 4;
+			const top = Math.max(header, 108);
+			const bottom = window.innerHeight - 108;
+			const atTop = window.scrollY <= 0;
+			const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
 			const scroll = ${JSON.stringify(scroll)};
 			if (index < 0) {
 				// Not rendered: look further down, and from the top again at the end.
 				if (scroll === 'none') { return null; }
-				const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
 				atEnd ? window.scrollTo(0, 0) : window.scrollBy(0, window.innerHeight / 2);
 				return null;
 			}
 			const box = lines[index].getBoundingClientRect();
-			if (scroll === 'top' && Math.abs(box.top - header - 8) > 2) {
+			if (scroll === 'top' && Math.abs(box.top - top) > 2) {
 				const before = window.scrollY;
-				window.scrollBy(0, box.top - header - 8); // Below the sticky header, which covers the lines under it.
+				window.scrollBy(0, box.top - top);
 				if (window.scrollY !== before) { return null; } // Else the page ends before the line reaches the top.
 			}
 			const nodes = [];
@@ -323,8 +329,8 @@ try {
 			}
 			// A wrapped line can be taller than the view, so only the point itself must be in view.
 			const y = point && box.top + point.y;
-			if (point && (y < header + 4 || y > window.innerHeight - 4)) {
-				if (scroll === 'center') { window.scrollBy(0, y - (header + window.innerHeight) / 2); }
+			if (point && (y < header || y > window.innerHeight - 4 || (y < top && !atTop) || (y > bottom && !atEnd))) {
+				if (scroll === 'center') { window.scrollBy(0, y - (top + bottom) / 2); }
 				return null;
 			}
 			return point;
@@ -349,7 +355,9 @@ try {
 		const b = await linePoint(to, 'end', 'none');
 		await a.page.mouse.move(a.x, a.y);
 		await a.page.mouse.down();
+		await sleep(300); // A person holds the button a moment, and a slow machine takes as long.
 		await a.page.mouse.move(b.x, b.y, { steps: 5 });
+		await sleep(300);
 		await a.page.mouse.up();
 	};
 	const openSemanticDiff = async () => {
