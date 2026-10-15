@@ -24,7 +24,7 @@ and Claude Code at runtime so that Claude sees what the user has open.
   - `scripts/launcher.ts`: the stdio MCP server. It finds the window for its working directory
     and relays bytes to it.
   - `scripts/prompt-hook.ts`: the `UserPromptSubmit` hook. It adds the shared browser pages, the
-    open images and the Markdown Editor selection to each prompt.
+    open images and the selection in the Markdown Editor or a SemanticDiff diff to each prompt.
   - `scripts/discovery.ts`: where a window records its pipe and token, and how the launcher
     finds the window for a folder. The extension imports it from here.
   - `skills/`: the skills that show Claude how to use the tools. `src/instructions.ts` names
@@ -51,15 +51,21 @@ and Claude Code at runtime so that Claude sees what the user has open.
 
 ## Runtime patches
 
-Each patch relies on internals of VS Code or Claude Code. After either one updates, check each
-internal below against the new version. VS Code's Markdown Editor is in the VS Code install,
-under `resources/app/extensions/markdown-language-features/`. Claude Code's code is
-`extension.js` in its extension folder, `anthropic.claude-code-<version>`.
+Each patch relies on internals of VS Code, Claude Code or SemanticDiff 0.10.0. After any of them
+updates, check each internal below against the new version. VS Code's Markdown Editor is in the
+VS Code install, under `resources/app/extensions/markdown-language-features/`. Claude Code's code
+is `extension.js` in its extension folder, `anthropic.claude-code-<version>`. SemanticDiff's code
+is `out/extension/main.js` and `out/webview/script.js` in its extension folder,
+`semanticdiff.semanticdiff-<version>-<platform>`.
 
 | Internal | Patch | Where to check |
 |----------|-------|----------------|
-| The `html` setter and `postMessage` on the webview prototype that all extensions share | Markdown Editor selection; finding Claude Code's chat webviews | `ExtHostWebview`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
+| The `html` setter and `postMessage` on the webview prototype that all extensions share | Markdown Editor and SemanticDiff selection; finding Claude Code's chat webviews | `ExtHostWebview`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
 | The Markdown Editor page's meta tags (`vscode-markdown-editor-script-nonce`, `-initial-state`, `-message-secret`), and its `acquireVsCodeApi().setState` calls with `selection.anchor` and `selection.active` | Markdown Editor selection | `dist/extension.js` builds the page; `markdown-editor-out/editor.js` runs in it |
+| SemanticDiff's page: `<title>SemanticDiff</title>`, `id="old-path"` and `id="new-path"`, and `initialState = JSON.parse(decodeURIComponent("…"))` with `input.original`, `input.modified` and `title` | SemanticDiff selection | `out/webview/index.html` is the template; search `main.js` for `setWebviewHTML` |
+| The `SetState` message SemanticDiff posts to its page, with the same `state` fields | SemanticDiff selection | search `main.js` for `"SetState"` |
+| The panel's view type `SemanticDiff` and its title, which is its tab's label | SemanticDiff selection | search `main.js` for `createWebviewPanel` |
+| The viewer in SemanticDiff's page: the only class that assigns `this.selectionText`; its `selection` (`start` and `end` as `row`, `line`, `offset`, and `leftSide`, `hasOffset`); `renderer.rows` (`type` 2 with `left` and `right` items `{ canSelect, line.text, code.text }`, `type` 1 for collapsed lines); `renderer.simplifySelection`; and its `updateSelectionText` and `clear` methods | SemanticDiff selection | search `script.js` for `selectionText` and `getSelectionText` |
 | Claude Code's own `vscode` API object, reached with `createRequire` from its `extension.js` | all Claude Code patches | `src/claudeApi.ts` |
 | The `selection_changed` request that Claude Code posts to its chat webview, inside `{ type: 'from-extension', message: … }` | the selection chip | search `extension.js` for `selection_changed` |
 | Claude Code's `window.onDidChangeTextEditorSelection` listeners | the selection for the CLI over `/ide` | search `extension.js` for `onDidChangeTextEditorSelection` |
@@ -73,8 +79,9 @@ The `*` activation event stays: the `onDidChangeTextEditorSelection` wrapper mus
 before Claude Code subscribes.
 
 The tests check the patches against a stand-in, not against Claude Code. After a Claude Code
-update, check them in a real VS Code with Claude Code: select text in a Markdown Editor, check
-the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file.
+update, check them in a real VS Code with Claude Code: select text in a Markdown Editor and in a
+SemanticDiff diff, check the selection chip and the CLI over `/ide`, and open a chat link to a
+`.md` file.
 
 ## Tests
 
@@ -85,10 +92,12 @@ the selection chip and the CLI over `/ide`, and open a chat link to a `.md` file
   `test/harness.ts`, and start no VS Code.
 - The end-to-end test runs on Windows only, as CI does, because `test/window-helper.ps1` drives
   the VS Code windows through Win32 and UI Automation. On another platform it stops at once with
-  a message. It downloads VS Code 1.140.0 into `.vscode-test/`. It starts it with its own user
+  a message. It downloads VS Code 1.140.0 and SemanticDiff 0.10.0 into `.vscode-test/`. It
+  starts VS Code with its own user
   data, extensions, discovery folder and Claude Code config, and calls the tools through the
   plugin's launcher and prompt hook, with the command lines from the plugin's manifests. The user's
-  own VS Code and Claude Code config stay untouched.
+  own VS Code and Claude Code config stay untouched. It selects text in SemanticDiff's diff
+  panel with the mouse, over the Chrome DevTools Protocol.
 - `test/standin/` is an extension with Claude Code's ID, `anthropic.claude-code`. It plays
   Claude Code's chat webview, selection listener and chat-link handler, since the test cannot
   install Claude Code.

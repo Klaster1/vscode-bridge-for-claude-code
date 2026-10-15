@@ -6,7 +6,7 @@
 A VS Code extension and a Claude Code plugin. Claude Code sees what you see in VS Code.
 
 - **Your browser pages:** press **Share with Agent**, and Claude reads, screenshots and clicks the page.
-- **Your selection:** text you select in the Markdown Editor, and the image in front, reach Claude with your prompt ([microsoft/vscode#271104](https://github.com/microsoft/vscode/issues/271104)).
+- **Your selection:** text you select in the Markdown Editor or a SemanticDiff diff, and the image in front, reach Claude with your prompt ([microsoft/vscode#271104](https://github.com/microsoft/vscode/issues/271104)).
 - **VS Code's tools:** type errors, rename, go to definition and any command, as an MCP server.
 - **Chat links:** a file link in Claude Code's chat opens in the editor you chose (fixes [anthropics/claude-code#81482](https://github.com/anthropics/claude-code/issues/81482)).
 
@@ -46,7 +46,11 @@ editor.
 
 ![A Markdown Editor selection in Claude Code's selection chip](docs/screenshots/markdown-selection-chip.png)
 
-If you don't see your selection, reopen the file.
+Text you select in a [SemanticDiff](https://marketplace.visualstudio.com/items?itemName=semanticdiff.semanticdiff)
+diff reaches Claude the same way. A selection on the left side gives Claude the lines and text of
+the original version.
+
+If you don't see your selection, reopen the file or the diff.
 
 ## Chat links open in the editor you chose
 
@@ -62,8 +66,8 @@ A link to a line or a heading opens the file at the top.
 ## The Claude Code CLI
 
 You can also run `claude` in a terminal and connect it to VS Code with `/ide`. Claude then has
-the tools and sees the images you have in front. The CLI shows your Markdown Editor selection, as it
-does for a text editor. Chat links do not apply, since they belong to the extension's chat
+the tools and sees the images you have in front. The CLI shows your selection in the Markdown Editor or a
+SemanticDiff diff, as it does for a text editor. Chat links do not apply, since they belong to the extension's chat
 panel. `/ide` needs Claude Code's VS Code extension installed.
 
 ![A Markdown Editor selection shown in the Claude Code CLI](docs/screenshots/cli-selection.png)
@@ -78,7 +82,7 @@ panel. `/ide` needs Claude Code's VS Code extension installed.
 | [`vscodeBridge.executeCommand.allow`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. Only your user settings set it, not a workspace's. |
 | [`vscodeBridge.executeCommand.deny`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. Only your user settings set it, not a workspace's. |
 | [`vscodeBridge.autoApprove`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
-| [`vscodeBridge.markdownEditor.selection`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.markdownEditor.selection) | `true` | Sends the Markdown Editor's selection to Claude. After you turn it on, reopen an open Markdown Editor, and reload the window for the CLI. |
+| [`vscodeBridge.markdownEditor.selection`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.markdownEditor.selection) | `true` | Sends the selection in the Markdown Editor and in SemanticDiff diffs to Claude. After you turn it on, reopen an open Markdown Editor or diff, and reload the window for the CLI. |
 | [`vscodeBridge.claudeCode.chatLinks`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 
 To keep Claude from closing the window, for example:
