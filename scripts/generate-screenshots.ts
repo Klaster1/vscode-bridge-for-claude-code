@@ -23,6 +23,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { _electron, type Frame, type Locator } from 'playwright';
 import { discoveryFile } from '../plugin/scripts/discovery.ts';
 import { commandLine } from '../src/shell.ts';
+import { keepUrlHandler } from '../test/url-handler.ts';
 import { hashInputs, recordFile, type InputRecord } from './screenshot-inputs.ts';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -203,6 +204,7 @@ for (const args of [['plugin', 'marketplace', 'add', root], ['plugin', 'install'
 const inputs = hashInputs(root); // Before packaging, so the record matches the code the shots show.
 const vscodeVersion = '1.140.0';
 const exe = await downloadAndUnzipVSCode({ version: vscodeVersion, cachePath: join(root, '.vscode-test') });
+keepUrlHandler();
 // Installed from a VSIX, as users get it: --extensionDevelopmentPath would put "[Extension Development Host]" in the title.
 const vsix = join(run, 'vscode-bridge-for-claude-code.vsix');
 const packaged = spawnSync(process.execPath, [join(root, 'node_modules', '@vscode', 'vsce', 'vsce'), 'package', '--allow-missing-repository', '--allow-star-activation', '--no-rewrite-relative-links', '--out', vsix], { cwd: root, encoding: 'utf8' });
