@@ -29,6 +29,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { discoveryFile, type DiscoveryRecord } from '../plugin/scripts/discovery.ts';
 import { commandLine } from '../src/shell.ts';
+import { keepUrlHandler } from './url-handler.ts';
 
 if (process.platform !== 'win32') {
 	console.error('test/run.ts runs on Windows only. It starts VS Code windows and answers their dialogs with test/window-helper.ps1, which uses Win32 and UI Automation. CI runs it on Windows.');
@@ -79,6 +80,7 @@ await new Promise<void>(r => page.listen(0, '127.0.0.1', r));
 const pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}/`;
 
 const exe = await downloadAndUnzipVSCode({ version: '1.140.0', cachePath: join(root, '.vscode-test') });
+keepUrlHandler();
 // Drop variables inherited from a VS Code or Claude Code parent so the test
 // instance cannot mistake itself for a CLI call into the user's running VS Code.
 const env: NodeJS.ProcessEnv = {};
