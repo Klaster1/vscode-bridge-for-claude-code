@@ -51,11 +51,14 @@ await check('the compared files and the title come from the initial state and fr
 	assert.deepEqual(readState({ type: 'ignored', input: { original: 1 } }), {});
 });
 
-await check('the script goes right after <head>, before SemanticDiff\'s own script', () => {
-	const patched = semanticDiffPage.patch({ onDidReceiveMessage: () => ({ dispose: () => undefined }) } as unknown as Vscode.Webview, page('undefined'));
+await check('the script goes right after <head>, before SemanticDiff\'s own script, and only once', () => {
+	const webview = { onDidReceiveMessage: () => ({ dispose: () => undefined }) } as unknown as Vscode.Webview;
+	const patched = semanticDiffPage.patch(webview, page('undefined'));
+	const again = semanticDiffPage.patch(webview, patched); // Another extension can set the page again as it is.
 	semanticDiffPage.clear();
 	assert.ok(patched.startsWith(`<html>\n    <head><script>${pageScript}</script>`));
 	assert.ok(patched.indexOf('script.js') > patched.indexOf(pageScript));
+	assert.equal(again, patched);
 });
 
 await check('a selection message is read, and an invalid one is ignored', () => {

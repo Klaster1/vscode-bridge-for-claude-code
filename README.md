@@ -47,8 +47,8 @@ editor.
 ![A Markdown Editor selection in Claude Code's selection chip](docs/screenshots/markdown-selection-chip.png)
 
 Text you select in a [SemanticDiff](https://marketplace.visualstudio.com/items?itemName=semanticdiff.semanticdiff)
-diff reaches Claude the same way. A selection on the left side gives Claude the lines and text of
-the original version.
+diff reaches Claude the same way, in SemanticDiff's own tab or in another extension's editor that
+shows its diff. A selection on the left side gives Claude the lines and text of the original version.
 
 If you don't see your selection, reopen the file or the diff.
 

@@ -4,9 +4,13 @@
 // SemanticDiff's own script builds it, and posts the selection after each change. The extension
 // side learns the compared files from the page's initial state and SemanticDiff's SetState
 // messages, and gives Claude Code the selection in the file of the side it is on.
+//
+// The page can be in SemanticDiff's own panel or in a tab of another extension that shows
+// SemanticDiff's page, such as a custom diff editor. Which page is in front comes from the
+// webview's panel, which webviewSelection.ts finds through the panel's `webview` getter.
 
 import * as vscode from 'vscode';
-import { deliver, delivered, reporter, type Delivered, type Delivery, type PageHandler } from './webviewSelection.ts';
+import { deliver, delivered, pageOf, panelOf, reporter, setPage, type Delivered, type Delivery, type PageHandler } from './webviewSelection.ts';
 
 const messageType = 'vscodeBridge.semanticDiffSelection';
 
@@ -27,11 +31,14 @@ interface Panel {
 	silence: NodeJS.Timeout;
 	original: vscode.Uri | undefined;
 	modified: vscode.Uri | undefined;
-	/** The panel's title, which is also its tab's label. */
+	/** SemanticDiff's title for the diff. */
 	title: string | undefined;
 	selection: PageSelection | undefined;
-	/** Orders panels with the same title: the newest one's selection wins. */
-	updated: number;
+	/** The webview's panel, once an extension has read it through `panel.webview`. */
+	owner: vscode.WebviewPanel | undefined;
+	ownerEvents: vscode.Disposable | undefined;
+	/** Whether the owner was the active editor at its last view state change. */
+	wasActive: boolean;
 }
 
 export interface SemanticDiffState {
@@ -131,15 +138,10 @@ export const pageScript = `(() => {
 })();`;
 
 const panels = new Map<vscode.Webview, Panel>();
-let clock = 0;
 const reportOnce = reporter('SemanticDiff selection');
 
 const isSemanticDiffPage = (html: string): boolean =>
 	html.includes('<title>SemanticDiff</title>') && html.includes('id="old-path"') && html.includes('id="new-path"');
-
-/** VS Code reports a panel's view type with a prefix, such as `mainThreadWebview-SemanticDiff`. */
-const isSemanticDiffTab = (tab: vscode.Tab | undefined): tab is vscode.Tab & { input: vscode.TabInputWebview } =>
-	tab?.input instanceof vscode.TabInputWebview && /(^|-)SemanticDiff$/.test(tab.input.viewType);
 
 /** The files and title in SemanticDiff's state, from its page or a SetState message. */
 export function readState(state: unknown): { original?: string; modified?: string; title?: string } {
@@ -195,29 +197,49 @@ const sideUri = (panel: Panel, s: PageSelection): vscode.Uri | undefined => s.si
 function forget(panel: Panel): void {
 	clearTimeout(panel.silence);
 	panel.listener.dispose();
+	panel.ownerEvents?.dispose();
 	panels.delete(panel.webview);
 }
 
-const openLabels = (): Set<string> =>
-	new Set(vscode.window.tabGroups.all.flatMap(group => group.tabs.filter(isSemanticDiffTab).map(tab => tab.label)));
+/** Where a page is: in front of its group, in the active group, and which group. */
+interface View { visible: boolean; active: boolean; column: number }
 
-/** Drops the panels whose tab is closed. */
-function prune(): void {
-	const open = openLabels();
-	for (const panel of [...panels.values()]) {
-		if (panel.title === undefined ? open.size === 0 : !open.has(panel.title)) {
-			forget(panel);
+/** Takes the webview's panel once it is known, and follows its view state and disposal. */
+function bind(panel: Panel): vscode.WebviewPanel | undefined {
+	const owner = panel.owner ?? panelOf(panel.webview);
+	if (owner && !panel.owner) {
+		panel.owner = owner;
+		try {
+			panel.wasActive = owner.active;
+			panel.ownerEvents = vscode.Disposable.from(
+				// Claude Code may have cleared its chip while another editor was active, so a page that becomes active again sends its selection again.
+				owner.onDidChangeViewState(() => {
+					const active = owner.active;
+					if (!owner.visible && !owner.options.retainContextWhenHidden) {
+						panel.selection = undefined; // VS Code drops a hidden page, and it comes back with no selection.
+					} else if (active && !panel.wasActive && panel.selection) {
+						void deliverPanel(panel);
+					}
+					panel.wasActive = active;
+				}),
+				owner.onDidDispose(() => forget(panel)),
+			);
+		} catch {
+			forget(panel); // A disposed panel throws on every property.
+			return undefined;
 		}
 	}
+	return owner;
 }
 
-/** The newest panel a SemanticDiff tab shows, matched by the tab's label. */
-const panelFor = (tab: vscode.Tab): Panel | undefined =>
-	[...panels.values()].filter(p => p.title === undefined || p.title === tab.label).sort((a, b) => b.updated - a.updated)[0];
-
-function isActive(panel: Panel): boolean {
-	const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-	return isSemanticDiffTab(tab) && (panel.title === undefined || panel.title === tab.label);
+function viewOf(panel: Panel): View | undefined {
+	const owner = bind(panel);
+	try {
+		return owner && { visible: owner.visible, active: owner.active, column: owner.viewColumn ?? 0 };
+	} catch {
+		forget(panel); // A disposed panel throws on every property.
+		return undefined;
+	}
 }
 
 function deliverPanel(panel: Panel): Promise<void> {
@@ -252,7 +274,8 @@ function patchPage(webview: vscode.Webview, html: string): string {
 		forget(previous);
 	}
 	const panel: Panel = {
-		webview, original: previous?.original, modified: previous?.modified, title: previous?.title, selection: undefined, updated: ++clock,
+		webview, original: previous?.original, modified: previous?.modified, title: previous?.title, selection: undefined,
+		owner: undefined, ownerEvents: undefined, wasActive: false,
 		silence: setTimeout(() => reportOnce('silent', 'a SemanticDiff panel sent no selection message; its viewer or acquireVsCodeApi may have changed.'), 10_000),
 		listener: webview.onDidReceiveMessage((message: unknown) => {
 			try {
@@ -261,9 +284,8 @@ function patchPage(webview: vscode.Webview, html: string): string {
 					clearTimeout(panel.silence);
 					const changed = selectionKey(selection ?? undefined) !== selectionKey(panel.selection);
 					panel.selection = selection ?? undefined;
-					panel.updated = ++clock;
-					if (changed && panel.selection && isActive(panel)) {
-						void deliverPanel(panel);
+					if (changed && panel.selection) {
+						void deliverPanel(panel); // The user made it in the page, so the page is in front.
 					}
 				}
 			} catch (err) {
@@ -281,11 +303,23 @@ function patchPage(webview: vscode.Webview, html: string): string {
 	}
 	panel.silence.unref();
 	panels.set(webview, panel);
-	return html.replace('<head>', () => `<head><script>${pageScript}</script>`);
+	bind(panel);
+	// An extension that shows SemanticDiff's page can set the page again as it is, script included.
+	return html.includes(pageScript) ? html : html.replace('<head>', () => `<head><script>${pageScript}</script>`);
 }
 
-// Claude Code may have cleared its chip while another tab was in front, so a panel that comes to the front sends its selection again.
-let frontLabel: string | undefined;
+const checking = new WeakSet<vscode.Webview>();
+
+/** Sets a SemanticDiff page again with the script when it was set past the bridge's setter. */
+function patchLate(webview: vscode.Webview): boolean {
+	const page = pageOf(webview);
+	if (panels.has(webview) || !page || !isSemanticDiffPage(page) || page.includes(pageScript)) {
+		return false;
+	}
+	reportOnce('late', 'a SemanticDiff page was set through an html setter taken before the bridge\'s patch was in place, so the bridge sets it again with its script.');
+	setPage(webview, page); // The page reloads from the state it saved, or from its initial state.
+	return true;
+}
 
 export const semanticDiffPage: PageHandler = {
 	matches: isSemanticDiffPage,
@@ -296,41 +330,44 @@ export const semanticDiffPage: PageHandler = {
 			setFiles(panel, (message as { state?: unknown }).state);
 		}
 	},
-	tabsChanged(closed) {
-		if (closed) {
-			prune();
+	seen(webview) {
+		const panel = panels.get(webview);
+		if (panel) {
+			bind(panel);
+			return;
 		}
-		const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-		const label = isSemanticDiffTab(tab) ? tab.label : undefined;
-		if (tab && label !== undefined && label !== frontLabel) {
-			const panel = panelFor(tab);
-			if (panel?.selection) {
-				void deliverPanel(panel);
-			}
+		// An extension that took the html setter before the bridge started sets the page past the bridge. SemanticDiff reads
+		// `panel.webview` in the statement that sets the page, so a blank page is checked again once that statement has run.
+		if (!patchLate(webview) && pageOf(webview) === '' && !checking.has(webview)) {
+			checking.add(webview);
+			setTimeout(() => {
+				checking.delete(webview);
+				try {
+					patchLate(webview);
+				} catch (err) {
+					reportOnce('late-failed', `setting a SemanticDiff page again failed: ${err instanceof Error ? err.message : String(err)}`);
+				}
+			}, 0);
 		}
-		frontLabel = label;
 	},
 	clear() {
 		for (const panel of [...panels.values()]) {
 			forget(panel);
 		}
-		frontLabel = undefined;
 	},
 };
 
-/** The SemanticDiff panel in front of each editor group, with its selection. */
+/** The SemanticDiff page in front of each editor group, with its selection. */
 export async function semanticDiffSelections(): Promise<SemanticDiffState[]> {
-	prune();
+	const shown = [...panels.values()].flatMap(panel => {
+		const view = viewOf(panel);
+		return view?.visible ? [{ panel, view }] : [];
+	}).sort((a, b) => a.view.column - b.view.column);
 	const out: SemanticDiffState[] = [];
-	for (const group of vscode.window.tabGroups.all) {
-		const tab = group.activeTab;
-		if (!isSemanticDiffTab(tab)) {
-			continue;
-		}
-		const panel = panelFor(tab);
-		const state: SemanticDiffState = { label: tab.label, original: panel?.original, modified: panel?.modified, active: group.isActive, delivered: { chip: false, cli: false } };
-		const s = panel?.selection;
-		if (panel && s) {
+	for (const { panel, view } of shown) {
+		const state: SemanticDiffState = { label: panel.title ?? 'SemanticDiff', original: panel.original, modified: panel.modified, active: view.active, delivered: { chip: false, cli: false } };
+		const s = panel.selection;
+		if (s) {
 			// A selection that ends at the start of a line does not include that line.
 			const endLine = s.endLine > s.startLine && s.endColumn === 0 ? s.endLine - 1 : s.endLine;
 			state.selection = { side: s.side, startLine: s.startLine, endLine, text: s.text };

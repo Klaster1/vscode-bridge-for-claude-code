@@ -1,8 +1,11 @@
 // Gives Claude Code the selection in editors that VS Code shows in a webview, which Claude Code's
 // IDE context does not report: VS Code's Markdown Editor (markdownSelection.ts) and SemanticDiff's
-// diff panel (semanticDiffSelection.ts). VS Code has no API for either selection, so this patches
+// diff page (semanticDiffSelection.ts). VS Code has no API for either selection, so this patches
 // the `html` setter that every extension's webviews share. A page handler recognises its page and
 // inserts a script that posts the selection to this extension.
+//
+// The `webview` getter that every extension's webview panels share is wrapped too. It tells which
+// panel shows a page, and so whether the page is in front, whatever extension's tab it is in.
 //
 // The same prototype's `postMessage` is wrapped to find Claude Code's chat webviews, which Claude
 // Code feeds with `selection_changed` messages for its selection chip. A selection goes to them in
@@ -27,8 +30,10 @@ export interface PageHandler {
 	patch(webview: vscode.Webview, html: string): string;
 	/** Sees each message an extension posts to a webview. */
 	posted?(webview: vscode.Webview, message: unknown): void;
+	/** Sees a webview each time an extension posts to it or reads it from its panel. */
+	seen?(webview: vscode.Webview): void;
 	/** Runs when the tabs or tab groups change; `closed` says a tab was closed. */
-	tabsChanged(closed: boolean): void;
+	tabsChanged?(closed: boolean): void;
 	/** Forgets the handler's pages when the patch is removed. */
 	clear(): void;
 }
@@ -68,6 +73,10 @@ const selectionListeners = new Set<(event: vscode.TextEditorSelectionChangeEvent
 /** The selection the CLI last got; cleared when a text editor's selection changes. */
 let cli: Mark | undefined;
 let postToWebview: ((webview: vscode.Webview, message: unknown) => Thenable<boolean>) | undefined;
+/** The panel of each webview that an extension reached through `panel.webview`. */
+let panels = new WeakMap<vscode.Webview, vscode.WebviewPanel>();
+let readHtml: ((webview: vscode.Webview) => unknown) | undefined;
+let writeHtml: ((webview: vscode.Webview, html: string) => void) | undefined;
 let running = false;
 let log: (message: string) => void = () => undefined;
 
@@ -80,6 +89,17 @@ export const reporter = (prefix: string) => (key: string, message: string): void
 };
 
 const reportOnce = reporter('Webview selection');
+
+export const panelOf = (webview: vscode.Webview): vscode.WebviewPanel | undefined => panels.get(webview);
+
+/** The page a webview shows, read past any `html` property another extension defined on the webview itself. */
+export const pageOf = (webview: vscode.Webview): string | undefined => {
+	const html = readHtml?.(webview);
+	return typeof html === 'string' ? html : undefined;
+};
+
+/** Sets a page through the patched prototype setter, past any `html` property another extension defined on the webview itself. */
+export const setPage = (webview: vscode.Webview, html: string): void => writeHtml?.(webview, html);
 
 export const delivered = (source: object, key: string): Delivered => ({
 	chip: chip?.source === source && chip.key === key,
@@ -181,6 +201,7 @@ export function installWebviewSelection(report: (message: string) => void, handl
 	// Every extension's webviews share one prototype, so a throwaway panel gives access to the setter the other extensions use. It opens in the active group: a new group would stay behind when workbench.editor.closeEmptyGroups is off.
 	const panel = vscode.window.createWebviewPanel('vscodeBridge.probe', 'VS Code Bridge for Claude Code', { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {});
 	const prototype: object | null = Object.getPrototypeOf(panel.webview);
+	const panelPrototype: object | null = Object.getPrototypeOf(panel);
 	panel.dispose();
 	const html = findOwner(prototype, 'html');
 	const originalSet = html?.descriptor.set;
@@ -207,6 +228,40 @@ export function installWebviewSelection(report: (message: string) => void, handl
 	};
 	Object.defineProperty(owner, 'html', patched);
 	running = true;
+	readHtml = webview => descriptor.get?.call(webview);
+	writeHtml = (webview, page) => patched.set!.call(webview, page);
+	const see = (webview: vscode.Webview) => {
+		for (const handler of handlers) {
+			try {
+				handler.seen?.(webview);
+			} catch (err) {
+				reportOnce('seen', `reading a webview failed: ${err instanceof Error ? err.message : String(err)}`);
+			}
+		}
+	};
+
+	// Extensions reach a panel's webview through this getter, which tells which panel a page is in.
+	const panelWebview = findOwner(panelPrototype, 'webview');
+	const originalPanelWebview = panelWebview?.descriptor.get;
+	let patchedPanelWebview: PropertyDescriptor | undefined;
+	if (panelWebview && originalPanelWebview && panelWebview.descriptor.configurable) {
+		patchedPanelWebview = {
+			...panelWebview.descriptor,
+			get(this: vscode.WebviewPanel) {
+				const webview = originalPanelWebview.call(this) as vscode.Webview;
+				if (active && webview && !panels.has(webview)) {
+					panels.set(webview, this);
+				}
+				if (active && webview) {
+					see(webview);
+				}
+				return webview;
+			},
+		};
+		Object.defineProperty(panelWebview.owner, 'webview', patchedPanelWebview);
+	} else {
+		reportOnce('panel', 'the webview panel has no configurable webview getter; a SemanticDiff panel counts as in front only by its own tab.');
+	}
 
 	const post = findOwner(prototype, 'postMessage');
 	const originalPost = post?.descriptor.value as ((this: vscode.Webview, message: unknown) => Thenable<boolean>) | undefined;
@@ -229,6 +284,7 @@ export function installWebviewSelection(report: (message: string) => void, handl
 					Promise.resolve(result).then(delivered => delivered === false && claudeWebviews.delete(this), () => claudeWebviews.delete(this));
 				}
 				if (active) {
+					see(this);
 					for (const handler of handlers) {
 						try {
 							handler.posted?.(this, message);
@@ -285,7 +341,7 @@ export function installWebviewSelection(report: (message: string) => void, handl
 	const tabsChanged = (closed: boolean) => {
 		for (const handler of handlers) {
 			try {
-				handler.tabsChanged(closed);
+				handler.tabsChanged?.(closed);
 			} catch (err) {
 				reportOnce('tabs', `following the tabs failed: ${err instanceof Error ? err.message : String(err)}`);
 			}
@@ -312,6 +368,12 @@ export function installWebviewSelection(report: (message: string) => void, handl
 			chip = undefined;
 			cli = undefined;
 			postToWebview = undefined;
+			panels = new WeakMap();
+			readHtml = undefined;
+			writeHtml = undefined;
+			if (panelWebview && patchedPanelWebview && Object.getOwnPropertyDescriptor(panelWebview.owner, 'webview')?.get === patchedPanelWebview.get) {
+				Object.defineProperty(panelWebview.owner, 'webview', panelWebview.descriptor);
+			}
 			// Another extension may have wrapped a method since; leave its wrapper in place, which now passes calls through.
 			if (Object.getOwnPropertyDescriptor(owner, 'html')?.set === patched.set) {
 				Object.defineProperty(owner, 'html', descriptor);

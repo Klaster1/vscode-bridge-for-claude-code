@@ -60,11 +60,11 @@ is `out/extension/main.js` and `out/webview/script.js` in its extension folder,
 
 | Internal | Patch | Where to check |
 |----------|-------|----------------|
-| The `html` setter and `postMessage` on the webview prototype that all extensions share | Markdown Editor and SemanticDiff selection; finding Claude Code's chat webviews | `ExtHostWebview`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
+| The `html` getter and setter and `postMessage` on the webview prototype that all extensions share | Markdown Editor and SemanticDiff selection; finding Claude Code's chat webviews | `ExtHostWebview`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
+| The `webview` getter on the webview panel prototype that all extensions share, which tells which panel shows a page | SemanticDiff selection: whether its page is in front, in any extension's tab | `ExtHostWebviewPanel`, in VS Code's `src/vs/workbench/api/common/extHostWebviewPanels.ts` |
 | The Markdown Editor page's meta tags (`vscode-markdown-editor-script-nonce`, `-initial-state`, `-message-secret`), and its `acquireVsCodeApi().setState` calls with `selection.anchor` and `selection.active` | Markdown Editor selection | `dist/extension.js` builds the page; `markdown-editor-out/editor.js` runs in it |
-| SemanticDiff's page: `<title>SemanticDiff</title>`, `id="old-path"` and `id="new-path"`, and `initialState = JSON.parse(decodeURIComponent("…"))` with `input.original`, `input.modified` and `title` | SemanticDiff selection | `out/webview/index.html` is the template; search `main.js` for `setWebviewHTML` |
+| SemanticDiff's page: `<title>SemanticDiff</title>`, `id="old-path"` and `id="new-path"`, and `initialState = JSON.parse(decodeURIComponent("…"))` with `input.original`, `input.modified` and `title`. SemanticDiff reads `panel.webview` in the statement that sets the page, and the page builds itself from `getState()` before `initialState` | SemanticDiff selection | `out/webview/index.html` is the template; search `main.js` for `setWebviewHTML`, and `script.js` for `getState()` |
 | The `SetState` message SemanticDiff posts to its page, with the same `state` fields | SemanticDiff selection | search `main.js` for `"SetState"` |
-| The panel's view type `SemanticDiff` and its title, which is its tab's label | SemanticDiff selection | search `main.js` for `createWebviewPanel` |
 | The viewer in SemanticDiff's page: the only class that assigns `this.selectionText`; its `selection` (`start` and `end` as `row`, `line`, `offset`, and `leftSide`, `hasOffset`); `renderer.rows` (`type` 2 with `left` and `right` items `{ canSelect, line.text, code.text }`, `type` 1 for collapsed lines); `renderer.simplifySelection`; and its `updateSelectionText` and `clear` methods | SemanticDiff selection | search `script.js` for `selectionText` and `getSelectionText` |
 | Claude Code's own `vscode` API object, reached with `createRequire` from its `extension.js` | all Claude Code patches | `src/claudeApi.ts` |
 | The `selection_changed` request that Claude Code posts to its chat webview, inside `{ type: 'from-extension', message: … }` | the selection chip | search `extension.js` for `selection_changed` |
@@ -101,6 +101,8 @@ SemanticDiff diff, check the selection chip and the CLI over `/ide`, and open a 
 - `test/standin/` is an extension with Claude Code's ID, `anthropic.claude-code`. It plays
   Claude Code's chat webview, selection listener and chat-link handler, since the test cannot
   install Claude Code.
+- `test/diffhost/` is an extension that shows SemanticDiff's diff page in an editor tab of its own,
+  as another extension can. It can also set the page past the bridge's `html` setter.
 - In a terminal inside VS Code, or under Claude Code started from one, unset the variables VS
   Code passes down. With them set, the dialog and "Share with Agent" checks can fail:
 

@@ -129,6 +129,7 @@ const code = spawn(exe, [
 	join(workspace, 'src', 'greet.ts'), // An open editor, as after a reload: a panel opened beside it would add a group.
 	...(vsix ? [] : [`--extensionDevelopmentPath=${root}`]),
 	`--extensionDevelopmentPath=${join(root, 'test', 'standin')}`, // Plays Claude Code's chat webview.
+	`--extensionDevelopmentPath=${join(root, 'test', 'diffhost')}`, // Shows SemanticDiff's page in an editor tab of its own.
 	`--user-data-dir=${join(run, 'user-data')}`,
 	`--extensions-dir=${join(run, 'extensions')}`,
 	'--disable-workspace-trust',
@@ -324,6 +325,14 @@ try {
 		await call('execute_command', { command: 'vscode.diff', args: [{ $uri: 'diff/before.ts' }, { $uri: 'diff/after.ts' }, 'before.ts vs after.ts'] });
 		await sleep(2000);
 		await call('execute_command', { command: 'semanticdiff.show' });
+		await linePoint(diffLines('after')[0]!, 'start');
+	};
+	// SemanticDiff's page in an editor tab of another extension, test/diffhost, in front of the text diff it shows.
+	const openHostedDiff = async (early: boolean) => {
+		await call('execute_command', { command: 'vscode.diff', args: [{ $uri: 'diff/before.ts' }, { $uri: 'diff/after.ts' }, 'before.ts vs after.ts'] });
+		await sleep(2000);
+		await call('execute_command', { command: 'diffhost.prepare', args: [early] });
+		await call('execute_command', { command: 'semanticdiff.show', args: [{ $uri: 'diff/after.ts' }] });
 		await linePoint(diffLines('after')[0]!, 'start');
 	};
 	// The SemanticDiff panel, then the diff it replaced.
@@ -583,6 +592,59 @@ try {
 	}
 
 	{
+		// SemanticDiff's page in another extension's editor tab, not SemanticDiff's own panel.
+		const diffSelectionNow = async () => textOf(await call('semantic_diff_selection', {}));
+		const until = async (done: (t: string) => boolean, ms = 20_000): Promise<string> => {
+			let t = await diffSelectionNow();
+			for (const end = Date.now() + ms; !done(t) && Date.now() < end; t = await diffSelectionNow()) {
+				await sleep(500);
+			}
+			return t;
+		};
+		await call('execute_command', { command: 'standin.open' });
+		await sleep(3000);
+		await check('another extension\'s tab shows SemanticDiff\'s page', async () => {
+			await openHostedDiff(false);
+			return true;
+		});
+		const after = diffLines('after');
+		const listed = await until(t => t.includes('nothing selected'));
+		await check('semantic_diff_selection lists SemanticDiff\'s page in another extension\'s tab', async () =>
+			/after\.ts \(active\), compared with \S*before\.ts: nothing selected\./.test(listed) || listed.slice(0, 300));
+		const count = (await chipSelections()).length;
+		const cliCount = (await cliDiffSelections()).length;
+		await dragLines(after[3]!, after[5]!);
+		const modified = diffText('after', 4, 6);
+		const hostedChip = (await chipSelectionsAfter(count, last => !!last?.selectedText)).at(-1);
+		await check('SemanticDiff in another extension\'s tab: Claude Code webview receives the selection', async () =>
+			/after\.ts$/.test(hostedChip?.filePath ?? '') && hostedChip?.startLine === 4 && hostedChip.endLine === 6 && lf(hostedChip.selectedText) === modified || JSON.stringify(hostedChip).slice(0, 300));
+		await check('SemanticDiff in another extension\'s tab: Claude Code CLI listener receives the selection', async () => {
+			const got = (await cliDiffSelections()).slice(cliCount);
+			return got.some(s => s.uri.endsWith('after.ts') && lf(s.text) === modified) || JSON.stringify(got).slice(0, 300);
+		});
+		{
+			const note = hookContext(runHook(workspace, 'cli-without-vscode').stdout) ?? '';
+			results.push({ name: 'prompt hook reports a selection in another extension\'s tab', ok: note.includes('modified side, lines 4-6') && note.includes('sum += price * (1 - discount);'), note: note.slice(0, 200) });
+		}
+		const beforeRefocus = (await chipSelections()).length;
+		await call('execute_command', { command: 'workbench.action.focusSecondEditorGroup' });
+		await call('execute_command', { command: 'workbench.action.focusFirstEditorGroup' });
+		const refocused = await chipSelectionsAfter(beforeRefocus);
+		await check('SemanticDiff\'s page in another extension\'s tab sends its selection again when it is active again', async () =>
+			refocused.length > beforeRefocus && lf(refocused.at(-1)?.selectedText) === modified || `${beforeRefocus} -> ${refocused.length} posts`);
+		// Another tab in front of it: VS Code drops the page, which comes back with no selection.
+		await call('execute_command', { command: 'workbench.action.nextEditorInGroup' });
+		const behind = await until(t => t.includes('No SemanticDiff panel is in front'));
+		await call('execute_command', { command: 'workbench.action.previousEditorInGroup' });
+		const back = await until(t => t.includes('nothing selected'));
+		await check('SemanticDiff\'s page behind another tab is not listed, and comes back with no selection', async () =>
+			/No SemanticDiff panel is in front/.test(behind) && /after\.ts \(active\), compared with \S*before\.ts: nothing selected\./.test(back) || `${behind.slice(0, 150)} | ${back.slice(0, 150)}`);
+		await call('execute_command', { command: 'standin.close' });
+		await closeSemanticDiff();
+		await expectText('semantic_diff_selection, the other extension\'s tab closed', 'semantic_diff_selection', {}, /No SemanticDiff panel is in front/);
+	}
+
+	{
 		// Chat links. Claude Code (here the stand-in) opens a link with showTextDocument(uri) and falls back to
 		// vscode.open only when that rejects; the bridge makes it reject for a file that opens in a custom editor.
 		const tab = async () => JSON.parse(textOf(await call('execute_command', { command: 'standin.activeTab' }))) as { kind: string; viewType?: string; uri?: string };
@@ -710,6 +772,26 @@ try {
 				const after = await postsToClaude();
 				return /modified side, lines 4-6, shown in Claude Code's selection chip[^\n]*selected text:/.test(t) && after > postsBeforeDiff || `${t.slice(0, 200)}; ${postsBeforeDiff} -> ${after} posts`;
 			});
+			await closeSemanticDiff();
+		}
+		{
+			// An extension that took the webview's html setter while the patch was off sets SemanticDiff's page past the patch, as one that starts before the bridge does.
+			await setSetting('markdownEditor.selection', false);
+			await call('execute_command', { command: 'vscode.diff', args: [{ $uri: 'diff/before.ts' }, { $uri: 'diff/after.ts' }, 'before.ts vs after.ts'] });
+			await sleep(2000);
+			await call('execute_command', { command: 'diffhost.prepare', args: [true] });
+			await setSetting('markdownEditor.selection', true);
+			await call('execute_command', { command: 'standin.close' });
+			await call('execute_command', { command: 'standin.open' }); // Its first post lets the bridge find it again.
+			await sleep(3000);
+			await call('execute_command', { command: 'semanticdiff.show', args: [{ $uri: 'diff/after.ts' }] });
+			await linePoint(diffLines('after')[0]!, 'start');
+			await sleep(2000); // The bridge sets the page again, and it reloads.
+			const postsBeforeLate = await postsToClaude();
+			await dragLines(diffLines('after')[3]!, diffLines('after')[5]!);
+			const posts = await chipSelectionsAfter(postsBeforeLate, last => /after\.ts$/.test(last?.filePath ?? '') && !!last?.selectedText && last.startLine === 4);
+			await check('a SemanticDiff page set past the bridge\'s setter still reaches Claude Code', async () =>
+				await postsToClaude() > postsBeforeLate && posts.at(-1)?.startLine === 4 && lf(posts.at(-1)?.selectedText) === diffText('after', 4, 6) || JSON.stringify(posts.at(-1)).slice(0, 300));
 			await closeSemanticDiff();
 		}
 		await call('execute_command', { command: 'standin.close' });

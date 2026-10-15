@@ -558,7 +558,7 @@ const where = (uri: vscode.Uri): string => uri.scheme === 'file' ? uri.fsPath : 
 const semanticDiffSelectionTool: BridgeTool = {
 	definition: {
 		name: 'semantic_diff_selection',
-		description: 'The text the user has selected in a SemanticDiff diff panel (the SemanticDiff extension): the front tab of each editor group that shows one. Returns the compared files, the side the selection is on, the 1-based line range in that side\'s file and the selected text; with nothing selected, the cursor line. Lines on the original side are the original version\'s. Claude Code\'s own IDE context does not report this panel.',
+		description: 'The text the user has selected in a SemanticDiff diff (the SemanticDiff extension), in SemanticDiff\'s own tab or in another extension\'s tab that shows its diff: the front tab of each editor group that shows one. Returns the compared files, the side the selection is on, the 1-based line range in that side\'s file and the selected text; with nothing selected, the cursor line. Lines on the original side are the original version\'s. Claude Code\'s own IDE context does not report this panel.',
 		inputSchema: markdownEditorSelectionTool.definition.inputSchema,
 	},
 	async call(args) {
