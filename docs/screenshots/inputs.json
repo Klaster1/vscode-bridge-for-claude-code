@@ -1,7 +1,7 @@
 {
-	"hash": "79b68fca26c399ca50d5c19c470f19636293b009efee6e1ed35787df9ccb6307",
+	"hash": "45257d56ff7a4c6bcb6110493907a9b8b2015a9dc87649ac59bbf692b6db7aeb",
 	"files": {
-		"package.json": "b33a1b545ed9aea251b60d518d59835fac6517bc8217e3866b5d6ba7ab835aa9",
+		"package.json": "388f4cd7f2dd63c87552af1ecb8bad3abac479c6177787f1f23cdee3e09d775c",
 		"scripts/generate-screenshots.ts": "b359a3e232026c29b1769176d8dd288142752c0c6e4a71f7730985ae7a66fec7",
 		"scripts/screenshot-fixture/docs/forecast-api.md": "6ab5f1aa78e0497f6c1775eb58be2aa5fbfb3696ac63e57feb648b188eff0d42",
 		"scripts/screenshot-fixture/package.json": "57eb6bad716f2dbd4b20240a82c03702635e7e558a9e07193c2d48ba4951a2bc",
@@ -20,5 +20,5 @@
 		"docs/social.png"
 	],
 	"vscode": "1.140.0",
-	"claudeCode": "2.1.299"
+	"claudeCode": "2.1.300"
 }

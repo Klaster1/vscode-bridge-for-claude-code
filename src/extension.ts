@@ -14,8 +14,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { createBridgeListener } from './bridgeServer.ts';
 import { installChatLinks } from './chatLinks.ts';
 import { serverInstructions } from './instructions.ts';
-import { installMarkdownSelection } from './markdownSelection.ts';
+import { markdownEditorPage } from './markdownSelection.ts';
+import { semanticDiffPage } from './semanticDiffSelection.ts';
 import { allTools } from './tools.ts';
+import { installWebviewSelection } from './webviewSelection.ts';
 
 let log: vscode.LogOutputChannel;
 const patches = new Map<string, vscode.Disposable>();
@@ -47,7 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		bridge.stop();
 		start().catch(err => log.error(`Bridge failed to start: ${err instanceof Error ? err.message : String(err)}`));
 	};
-	// Install the patches before returning, so a Markdown Editor opened right after activation is covered.
+	// Install the patches before returning, so a Markdown Editor or SemanticDiff panel opened right after activation is covered.
 	syncPatches();
 	restart();
 	// The pipe is keyed on the first folder, so re-key when the folders change.
@@ -72,7 +74,7 @@ const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeBridge
 
 /** The runtime patches, each switched by its own setting. */
 const patchSettings: [setting: string, install: (report: (message: string) => void) => vscode.Disposable][] = [
-	['markdownEditor.selection', installMarkdownSelection],
+	['markdownEditor.selection', report => installWebviewSelection(report, [markdownEditorPage, semanticDiffPage])], // The setting keeps its name from before the SemanticDiff page, so existing settings still apply.
 	['claudeCode.chatLinks', installChatLinks],
 ];
 

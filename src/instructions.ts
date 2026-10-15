@@ -3,7 +3,7 @@
 
 export const serverInstructions = `Tools of the VS Code window the user works in. Use them without being asked.
 
-Before you ask what "this", "this page" or "this image" means, read the notes on the prompt about shared browser pages, open images and the Markdown Editor selection, or call shared_browser_pages, visible_images or markdown_editor_selection.
+Before you ask what "this", "this page" or "this image" means, read the notes on the prompt about shared browser pages, open images and the selection in the Markdown Editor or a SemanticDiff diff, or call shared_browser_pages, visible_images, markdown_editor_selection or semantic_diff_selection.
 
 Integrated browser:
 - Open a page with open_browser_page. To check how it looks, take a screenshot with screenshot_page.

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0] - 2026-10-15
+
+### Added
+
+- Text you select in a SemanticDiff diff reaches Claude, as a Markdown Editor selection does.
+
+### Changed
+
+- `vscodeBridge.markdownEditor.selection` turns the SemanticDiff selection on and off too.
+
 ## [0.5.1] - 2026-10-14
 
 ### Added

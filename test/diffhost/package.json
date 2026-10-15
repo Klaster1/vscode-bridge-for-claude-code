@@ -1,0 +1,24 @@
+{
+  "name": "diffhost",
+  "publisher": "bridgetest",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.140.0"
+  },
+  "main": "./extension.js",
+  "extensionDependencies": [
+    "semanticdiff.semanticdiff"
+  ],
+  "activationEvents": [
+    "onCommand:diffhost.prepare"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "diffhost.prepare",
+        "title": "Diff host: open a tab for SemanticDiff's next diff"
+      }
+    ]
+  }
+}

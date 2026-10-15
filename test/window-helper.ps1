@@ -7,6 +7,8 @@
 #    to -32000,-32000 without activating it (SetWindowPos SWP_NOACTIVATE),
 #    which keeps it rendered, and moves it again if VS Code restores the
 #    window. -Hide none leaves it alone. It never activates a window.
+#    -Size WIDTHxHEIGHT gives each window that size once, in place, so the
+#    layout is the same on every screen.
 # 2. Answers the confirmation dialogs that tokenless tool calls raise. With
 #    the default window.dialogStyle ("native") these are OS task dialogs
 #    (Electron dialog.showMessageBox, class #32770). It reads the button names
@@ -31,6 +33,7 @@ param(
 	[ValidateSet('offscreen', 'none')] [string] $Hide = 'offscreen',
 	# Leave dialogs for a person to answer.
 	[switch] $NoClick,
+	[string] $Size,
 	[string] $InvokeButton
 )
 
@@ -60,6 +63,8 @@ public static System.Collections.Generic.List<System.IntPtr> Windows(uint proces
 '@
 $W = [Bridge.Win32]
 $SWP_NOSIZE_NOZORDER_NOACTIVATE = 0x0001 -bor 0x0004 -bor 0x0010
+$SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 -bor 0x0004 -bor 0x0010
+$sized = New-Object 'System.Collections.Generic.HashSet[System.IntPtr]'
 $TDM_CLICK_BUTTON = 0x0466
 
 $A = [System.Windows.Automation.AutomationElement]
@@ -134,8 +139,12 @@ if ($InvokeButton) {
 }
 
 while (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {
-	if ($Hide -ne 'none') {
-		foreach ($hwnd in $W::Windows([uint32]$ProcessId, 'Chrome_WidgetWin_1')) {
+	foreach ($hwnd in $W::Windows([uint32]$ProcessId, 'Chrome_WidgetWin_1')) {
+		if ($Size -match '^(\d+)x(\d+)$' -and $sized.Add($hwnd)) {
+			[void]$W::SetWindowPos($hwnd, [System.IntPtr]::Zero, 0, 0, [int]$Matches[1], [int]$Matches[2], $SWP_NOMOVE_NOZORDER_NOACTIVATE)
+			Add-Content -Path $LogFile -Value ("{0:HH:mm:ss.fff} window {1} sized to {2} without activation" -f (Get-Date), $hwnd, $Size)
+		}
+		if ($Hide -ne 'none') {
 			Hide-Window $hwnd
 		}
 	}

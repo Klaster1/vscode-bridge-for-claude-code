@@ -4,8 +4,10 @@
 
 import * as vscode from 'vscode';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
-import { markdownEditorSelections, markdownSelectionRunning } from './markdownSelection.ts';
+import { markdownEditorSelections } from './markdownSelection.ts';
+import { semanticDiffSelections } from './semanticDiffSelection.ts';
 import { safeStringify, toolResultToContent } from './render.ts';
+import { webviewSelectionRunning } from './webviewSelection.ts';
 
 type Args = Record<string, unknown>;
 
@@ -519,7 +521,7 @@ const markdownEditorSelectionTool: BridgeTool = {
 		},
 	},
 	async call(args) {
-		if (!markdownSelectionRunning()) {
+		if (!webviewSelectionRunning()) {
 			return text('The Markdown Editor selection is not being read: vscodeBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the editor.');
 		}
 		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
@@ -549,8 +551,56 @@ const markdownEditorSelectionTool: BridgeTool = {
 	},
 };
 
+// --- semantic_diff_selection -----------------------------------------------
+
+const where = (uri: vscode.Uri): string => uri.scheme === 'file' ? uri.fsPath : uri.toString();
+
+const semanticDiffSelectionTool: BridgeTool = {
+	definition: {
+		name: 'semantic_diff_selection',
+		description: 'The text the user has selected in a SemanticDiff diff (the SemanticDiff extension), in SemanticDiff\'s own tab or in another extension\'s tab that shows its diff: the front tab of each editor group that shows one. Returns the compared files, the side the selection is on, the 1-based line range in that side\'s file and the selected text; with nothing selected, the cursor line. Lines on the original side are the original version\'s. Claude Code\'s own IDE context does not report this panel.',
+		inputSchema: markdownEditorSelectionTool.definition.inputSchema,
+	},
+	async call(args) {
+		if (!webviewSelectionRunning()) {
+			return text('The SemanticDiff selection is not being read: vscodeBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the diff.');
+		}
+		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
+		const entries: string[] = [];
+		for (const { label, original, modified, active, selection, delivered } of await semanticDiffSelections()) {
+			const surface = args['skipDeliveredTo'];
+			if ((surface === 'chip' || surface === 'cli') && delivered[surface]) {
+				continue;
+			}
+			const name = `${modified ? where(modified) : `"${label}"`}${active ? ' (active)' : ''}${original ? `, compared with ${where(original)}` : ''}`;
+			if (!modified || !original) {
+				if (args['selectedOnly'] !== true) {
+					entries.push(`- ${name}: no selection reported. Reopen the diff if the bridge started after it opened.`);
+				}
+			} else if (!selection) {
+				if (args['selectedOnly'] !== true) {
+					entries.push(`- ${name}: nothing selected.`);
+				}
+			} else if (!selection.text) {
+				if (args['selectedOnly'] !== true) {
+					entries.push(`- ${name}: nothing selected, cursor on line ${selection.startLine} of the ${selection.side} version.`);
+				}
+			} else {
+				const lines = selection.startLine === selection.endLine ? `line ${selection.startLine}` : `lines ${selection.startLine}-${selection.endLine}`;
+				const side = selection.side === 'original'
+					? `original side, ${lines} of the original version${original.scheme === 'file' ? '' : ', not of the file on disk'}`
+					: `modified side, ${lines}`;
+				const shown = selection.text.length > maxChars ? `${selection.text.slice(0, maxChars)}\n[selection truncated at ${maxChars} of ${selection.text.length} characters]` : selection.text;
+				const fence = fenceFor(shown);
+				entries.push(`- ${name}, ${side}${delivered.chip ? ', shown in Claude Code\'s selection chip' : ''}${delivered.cli ? ', sent to Claude Code in the terminal' : ''}, selected text:\n${fence}\n${shown}\n${fence}`);
+			}
+		}
+		return text(entries.length ? entries.join('\n') : args['skipDeliveredTo'] ? 'No SemanticDiff panel has selected text beyond what Claude Code already has.' : args['selectedOnly'] === true ? 'No SemanticDiff panel has selected text.' : 'No SemanticDiff panel is in front in an editor group.');
+	},
+};
+
 export function allTools(info: () => object): BridgeTool[] {
 	const forwardedNow = forwardedTools();
 	const browser = forwardedNow.some(t => t.definition.name === 'list_browser_pages') ? [sharedBrowserPages] : [];
-	return [getDiagnostics, renameSymbol, executeCommand, listCommands, openFiles, listWorkspacesTool(info), visibleImagesTool, markdownEditorSelectionTool, ...forwardedNow, ...browser];
+	return [getDiagnostics, renameSymbol, executeCommand, listCommands, openFiles, listWorkspacesTool(info), visibleImagesTool, markdownEditorSelectionTool, semanticDiffSelectionTool, ...forwardedNow, ...browser];
 }
