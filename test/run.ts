@@ -335,8 +335,9 @@ try {
 		await call('execute_command', { command: 'semanticdiff.show', args: [{ $uri: 'diff/after.ts' }] });
 		await linePoint(diffLines('after')[0]!, 'start');
 	};
-	// The SemanticDiff panel, then the diff it replaced.
+	// The SemanticDiff panel, then the diff it replaced. Both are in the first group, which a check may have left inactive.
 	const closeSemanticDiff = async () => {
+		await call('execute_command', { command: 'workbench.action.focusFirstEditorGroup' });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 	};
