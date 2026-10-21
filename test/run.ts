@@ -9,9 +9,9 @@
 //   node test/run.ts            (Node 22.18+), extension loaded from source
 //   BRIDGE_TEST_VSIX=path\to.vsix node test/run.ts   installs that VSIX into the
 //                                isolated extensions folder and tests it instead
-//   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeBridge.autoApprove and the
-//                                proposed API it needs; with BRIDGE_TEST_NO_CLICK=1
-//                                the browser tools must then run with no dialog
+//   BRIDGE_TEST_AUTO_APPROVE=1   turns on vscodeBridge.autoApprove for the whole run;
+//                                with BRIDGE_TEST_NO_CLICK=1 the browser tools must
+//                                then run with no dialog
 //   BRIDGE_TEST_NO_CLICK=1       leaves the confirmation dialogs for a person
 //   BRIDGE_TEST_WINDOW=none      leaves the test window where VS Code puts it; the
 //                                default, offscreen, moves it away without activating it
@@ -137,7 +137,7 @@ const code = spawn(exe, [
 	'--skip-release-notes',
 	'--new-window',
 	`--remote-debugging-port=${cdpPort}`,
-	...(autoApprove ? ['--enable-proposed-api=klaster1.vscode-bridge-for-claude-code'] : []),
+	'--enable-proposed-api=klaster1.vscode-bridge-for-claude-code', // Without the setting on, a tool call still shows its dialog.
 	...(process.env['BRIDGE_TEST_TRACE'] ? ['--log=trace'] : []),
 ], { env, stdio: 'ignore' });
 
@@ -255,7 +255,7 @@ try {
 	// The selections the stand-in's text editor selection listener got for notes.md: what the CLI would get.
 	const cliSelections = async () => (JSON.parse(textOf(await call('execute_command', { command: 'standin.selections' }))) as { uri: string; text: string }[]).filter(s => s.uri.endsWith('notes.md'));
 	const cliDiffSelections = async () => (JSON.parse(textOf(await call('execute_command', { command: 'standin.selections' }))) as { uri: string; text: string }[]).filter(s => /[\\/]diff[\\/]/.test(s.uri));
-	type ChipPayload = { filePath: string; startLine: number; endLine: number; startColumn?: number; endColumn?: number; selectedText?: string };
+	type ChipPayload = { filePath: string; sourceUri?: string; startLine: number; endLine: number; startColumn?: number; endColumn?: number; selectedText?: string };
 	const chipSelections = async (): Promise<(ChipPayload | undefined)[]> =>
 		(JSON.parse(textOf(await call('execute_command', { command: 'standin.received' }))) as { message?: { request?: { type?: string; selection?: ChipPayload } } }[])
 			.flatMap(m => m.message?.request?.type === 'selection_changed' ? [m.message.request.selection] : []);
@@ -1016,6 +1016,53 @@ ${after.stdout}`);
 		const stillShared = await watchSharing('sharing state after Stop Sharing with Agent', 5000);
 		const unshared = runHook(workspace);
 		results.push({ name: 'unshare with the same button', ok: unpressed.startsWith('pressed') && !stillShared && !(hookContext(unshared.stdout) ?? '').includes('shared-by-user'), note: unpressed });
+	}
+	// A page in front in the integrated browser reaches Claude Code's chip as an opened file, and its selected text as a selection.
+	// Reading the selection runs Playwright code, so it needs the auto-approve setting; the proposed API is on for the whole run.
+	if (has('list_browser_pages') && has('run_playwright_code') && has('shared_browser_pages')) {
+		const setAutoApprove = async (value: boolean) => {
+			overrides['vscodeBridge.autoApprove'] = value;
+			writeSettings(true);
+			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
+				if (textOf(await call('execute_command', { command: 'standin.setting', args: ['autoApprove'] })) === String(value)) {
+					break;
+				}
+			}
+			await sleep(1000);
+		};
+		await setAutoApprove(true);
+		await call('execute_command', { command: 'standin.open' });
+		const chipAfter = async (count: number, done: (s: ChipPayload) => boolean): Promise<ChipPayload | undefined> => {
+			for (const end = Date.now() + 20_000; Date.now() < end; await sleep(500)) {
+				const hit = (await chipSelections()).slice(count).find(s => s && done(s));
+				if (hit) {
+					return hit;
+				}
+			}
+			return undefined;
+		};
+		const count = (await chipSelections()).length;
+		const opened = textOf(await call('open_browser_page', { url: `${pageUrl}?chip`, forceNew: true }, 15_000));
+		const chipPageId = /Page ID: ([0-9a-f-]{36})/i.exec(opened)?.[1];
+		await call('execute_command', { command: 'workbench.action.lastEditorInGroup' }); // The page opens in a background tab.
+		const openedChip = await chipAfter(count, s => s.filePath === 'Bridge test');
+		await check('a page in front reaches Claude Code as an opened file', async () =>
+			openedChip?.sourceUri === `${pageUrl}?chip` && openedChip.startLine === 1 && openedChip.endLine === 1 && openedChip.selectedText === undefined || JSON.stringify(openedChip ?? opened).slice(0, 300));
+		if (chipPageId) {
+			const selecting = (await chipSelections()).length;
+			await call('run_playwright_code', { pageId: chipPageId, code: 'await page.evaluate(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById("h")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })' });
+			const selectedChip = await chipAfter(selecting, s => s.selectedText !== undefined);
+			await check('text selected on a page reaches Claude Code as a selection', async () =>
+				selectedChip?.filePath === 'Bridge test' && selectedChip.selectedText === 'Before' && selectedChip.startLine === 1 && selectedChip.endLine === 1 || JSON.stringify(selectedChip ?? null).slice(0, 300));
+			await expectText('shared_browser_pages names the selected text for the CLI', 'shared_browser_pages', { snapshot: false, selection: true, skipDeliveredTo: 'cli' }, /Selected text:[\s\S]*Before/);
+			await check('shared_browser_pages leaves out a selection the chip shows', async () => {
+				const t = textOf(await call('shared_browser_pages', { snapshot: false, selection: true, skipDeliveredTo: 'chip' }));
+				return !t.includes('Selected text:') && t.includes(chipPageId) || t.slice(0, 300);
+			});
+		}
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		await call('execute_command', { command: 'standin.close' });
+		await setAutoApprove(autoApprove);
 	}
 	for (const name of dialogTools) {
 		// With auto-approve on, a dialog should never appear, so waiting is a failure.

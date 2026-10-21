@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0] - 2026-10-21
+
+### Added
+
+- A shared browser page in front shows in Claude Code's selection chip as an opened file.
+- Text you select on a shared browser page reaches Claude, in the chip and in the prompt note.
+
 ## [0.6.1] - 2026-10-21
 
 ### Fixed
