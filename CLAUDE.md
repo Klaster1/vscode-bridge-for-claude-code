@@ -153,6 +153,10 @@ tab. The release workflow uses the top section as the GitHub Release notes.
 ## Workflow
 
 - Work on a branch and open a pull request. Merge it only when the `test` check is green.
+- The maintainer checks each fix or feature by hand. After a change to `src/`, build the VSIX
+  with `npm run package` and install it with `code --install-extension <vsix> --force`, before
+  you report the work done. Say in the report that it is installed. The end-to-end test does
+  not count: it runs its own VS Code.
 - Branch protection needs a public repo or GitHub Pro, so this is a rule until then. Once the repo
   is public, this command creates a ruleset that requires a pull request and the `test` check on
   `main`:

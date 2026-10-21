@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1] - 2026-10-21
+
+### Fixed
+
+- A Markdown Editor with no selection, or a click outside its text, still attaches the file.
+
 ## [0.6.0] - 2026-10-15
 
 ### Added

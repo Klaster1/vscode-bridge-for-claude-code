@@ -21,7 +21,8 @@ interface Editor {
 	/** The document text when the page was built; matches the editor's document while it is unedited. */
 	content: string | undefined;
 	uri: vscode.Uri | undefined;
-	selection: Offsets | undefined;
+	/** Undefined until the editor reports; null when it has no selection, as after a click outside its text. */
+	selection: Offsets | null | undefined;
 	/** Orders editors that show the same file: the newest one's selection wins. */
 	updated: number;
 }
@@ -113,7 +114,7 @@ function parseSelection(message: unknown): Offsets | null | undefined {
 	return Number.isInteger(anchor) && Number.isInteger(active) && anchor! >= 0 && active! >= 0 ? { anchor: anchor!, active: active! } : undefined;
 }
 
-const offsetsKey = (o: Offsets | null | undefined): string => o ? `${o.anchor}:${o.active}` : '';
+const offsetsKey = (o: Offsets | null | undefined): string => o ? `${o.anchor}:${o.active}` : o === null ? 'none' : '';
 
 function isActiveTab(uri: vscode.Uri | undefined): boolean {
 	const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
@@ -128,7 +129,7 @@ function rangeOf(doc: vscode.TextDocument, offsets: Offsets): vscode.Range {
 
 function deliverEditor(editor: Editor): Promise<void> {
 	const { selection, uri } = editor;
-	if (!selection || !uri) {
+	if (selection === undefined || !uri) {
 		return Promise.resolve();
 	}
 	return deliver(editor, offsetsKey(selection), async () => {
@@ -136,7 +137,9 @@ function deliverEditor(editor: Editor): Promise<void> {
 		if (editor.selection !== selection) {
 			return undefined; // A newer selection is on its way.
 		}
-		return { doc, selection: new vscode.Selection(doc.positionAt(selection.anchor), doc.positionAt(selection.active)) };
+		// With no selection the file still goes to Claude Code, as for a text editor's cursor; the start of the file stands in for it.
+		const [anchor, active] = selection ? [selection.anchor, selection.active] : [0, 0];
+		return { doc, selection: new vscode.Selection(doc.positionAt(anchor), doc.positionAt(active)) };
 	}, () => editor.selection === selection);
 }
 
@@ -171,9 +174,9 @@ function patchPage(webview: vscode.Webview, html: string): string {
 				if (selection !== undefined) {
 					clearTimeout(editor.silence);
 					const changed = offsetsKey(selection) !== offsetsKey(editor.selection);
-					editor.selection = selection ?? undefined;
+					editor.selection = selection;
 					editor.updated = ++clock;
-					if (resolve(editor) && changed && editor.selection && isActiveTab(editor.uri)) {
+					if (resolve(editor) && changed && isActiveTab(editor.uri)) {
 						void deliverEditor(editor);
 					}
 				}
@@ -200,7 +203,7 @@ export const markdownEditorPage: PageHandler = {
 		const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
 		const uri = input instanceof vscode.TabInputCustom && input.viewType === viewType ? input.uri.toString() : undefined;
 		if (uri && uri !== frontUri) {
-			const newest = [...editors.values()].filter(e => resolve(e)?.toString() === uri && e.selection).sort((a, b) => b.updated - a.updated)[0];
+			const newest = [...editors.values()].filter(e => resolve(e)?.toString() === uri && e.selection !== undefined).sort((a, b) => b.updated - a.updated)[0];
 			if (newest) {
 				void deliverEditor(newest);
 			}
