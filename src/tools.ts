@@ -4,6 +4,8 @@
 
 import * as vscode from 'vscode';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import { approval, autoApprove, pageSelection, sharedPages } from './browserPages.ts';
+import { browserSelectionDelivered } from './browserSelection.ts';
 import { markdownEditorSelections } from './markdownSelection.ts';
 import { semanticDiffSelections } from './semanticDiffSelection.ts';
 import { safeStringify, toolResultToContent } from './render.ts';
@@ -351,22 +353,6 @@ const forwarded: Record<string, string> = {
 const confirming = new Set(['open_browser_page', 'navigate_page', 'run_playwright_code']);
 
 /**
- * With vscodeBridge.autoApprove on, answers those confirmations the way a
- * chat preToolUse hook would, so VS Code runs the tool without the dialog.
- * Copilot never shows one because the chat path honours
- * chat.tools.global.autoApprove; the tokenless path ignores that setting and
- * only skips the dialog for a hook's "allow". VS Code forwards the
- * preToolUseResult field only from an extension granted the
- * chatParticipantPrivate proposal (via argv.json enable-proposed-api), and
- * silently drops it otherwise, so the dialog then still shows.
- */
-function approval(): object {
-	return vscode.workspace.getConfiguration('vscodeBridge').get<boolean>('autoApprove', true)
-		? { preToolUseResult: { permissionDecision: 'allow' } }
-		: {};
-}
-
-/**
  * The forwarded tools that exist in this window right now. Copilot's appear
  * only while Copilot is active; the browser ones only while
  * workbench.browser.enableChatTools is on. Schemas and descriptions are VS
@@ -397,51 +383,17 @@ function forwardedTools(): BridgeTool[] {
 
 // --- shared_browser_pages ----------------------------------------------------
 
-interface SharedPage {
-	id: string;
-	title: string;
-	url: string;
-	/** "active", "visible" or "not visible", as VS Code reports it. */
-	visibility: string;
-}
-
-/**
- * Pages shared with the agent: the ones the user shared with the page
- * toolbar's "Share with Agent" button, plus the ones open_browser_page opened.
- * VS Code has no API for the sharing state, so this reads the "shared with
- * you" section of list_browser_pages, whose lines VS Code formats as
- * `- [pageId] Title (url) (active|visible|not visible)`. A page whose address
- * the network policy blocks comes back with its title masked and no URL.
- */
-async function sharedPages(token: vscode.CancellationToken): Promise<SharedPage[] | undefined> {
-	if (!vscode.lm.tools.some(t => t.name === 'list_browser_pages')) {
-		return undefined;
-	}
-	const result = await vscode.lm.invokeTool('list_browser_pages', { input: {}, toolInvocationToken: undefined }, token);
-	const listing = result.content.map(p => p instanceof vscode.LanguageModelTextPart ? p.value : '').join('\n');
-	const section = /currently shared with you[^\n]*\n((?:- .*(?:\n|$))*)/.exec(listing)?.[1] ?? '';
-	const pages: SharedPage[] = [];
-	for (const line of section.split('\n')) {
-		const m = /^- \[([^\]]+)\] (.*?) \((active|visible|not visible)\)$/.exec(line);
-		if (!m) {
-			continue;
-		}
-		const rest = m[2]!.replace(/ \(resource-backed[^)]*\)$/, '');
-		const u = / \((\S+)\)$/.exec(rest);
-		pages.push({ id: m[1]!, title: u ? rest.slice(0, u.index) : rest, url: u?.[1] ?? '', visibility: m[3]! });
-	}
-	return pages;
-}
-
 const sharedBrowserPages: BridgeTool = {
 	definition: {
 		name: 'shared_browser_pages',
-		description: 'Integrated-browser pages shared with you: those the user shared with the page toolbar\'s "Share with Agent" button, and those you opened with open_browser_page. Returns each page\'s ID, title and URL and, unless `snapshot` is false, its accessibility snapshot (from read_page). Use the page ID with read_page, screenshot_page, click_element and the other browser tools.',
+		description: 'Integrated-browser pages shared with you: those the user shared with the page toolbar\'s "Share with Agent" button, and those you opened with open_browser_page. Returns each page\'s ID, title and URL and, unless `snapshot` is false, its accessibility snapshot (from read_page). With `selection` true, also the text selected on each page, when vscodeBridge.autoApprove is on. Use the page ID with read_page, screenshot_page, click_element and the other browser tools.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				snapshot: { type: 'boolean', description: 'Include each page\'s text snapshot. Default true.' },
-				maxChars: { type: 'number', description: 'Cap on each snapshot. Default 4000.' },
+				maxChars: { type: 'number', description: 'Cap on each snapshot and each selection. Default 4000.' },
+				selection: { type: 'boolean', description: 'Include the text selected on each page in view. Default false.' },
+				skipDeliveredTo: { type: 'string', enum: ['chip', 'cli'], description: 'Leave out a selection that already reached Claude Code\'s chat panel (`chip`) or the Claude Code CLI connected through /ide (`cli`).' },
 			},
 		},
 	},
@@ -461,6 +413,14 @@ const sharedBrowserPages: BridgeTool = {
 				const read = await vscode.lm.invokeTool('read_page', { input: { pageId: p.id }, toolInvocationToken: undefined }, token);
 				const snap = (await toolResultToContent(read)).map(c => c.type === 'text' ? c.text : '').join('\n');
 				block += `\n\n${snap.length > maxChars ? `${snap.slice(0, maxChars)}\n[snapshot truncated at ${maxChars} characters]` : snap}`;
+			}
+			if (args['selection'] === true && autoApprove() && p.visibility !== 'not visible') { // Reading it runs Playwright code, which asks for confirmation without auto-approve.
+				const selected = await pageSelection(p.id, token).catch(() => undefined);
+				if (selected && !(args['skipDeliveredTo'] && browserSelectionDelivered(p.id, selected)[args['skipDeliveredTo'] as 'chip' | 'cli'])) {
+					const shown = selected.length > maxChars ? `${selected.slice(0, maxChars)}\n[selection truncated at ${maxChars} of ${selected.length} characters]` : selected;
+					const fence = fenceFor(shown);
+					block += `\nSelected text:\n${fence}\n${shown}\n${fence}`;
+				}
 			}
 			blocks.push(block);
 		}

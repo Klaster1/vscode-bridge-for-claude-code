@@ -50,7 +50,7 @@ export interface Delivery {
 export interface Delivered { chip: boolean; cli: boolean }
 
 /** Claude Code's selection payload, as it builds one for a text editor. */
-interface ChipSelection {
+export interface ChipSelection {
 	filePath: string;
 	sourceUri: string;
 	startLine: number;
@@ -148,31 +148,55 @@ export async function deliver(source: object, key: string, read: () => Promise<D
 		let payload: ChipSelection | undefined;
 		if (!range.isEmpty) {
 			payload = { ...base, endLine: range.end.line + 1, startColumn: range.start.character, endColumn: range.end.character, selectedText: text ?? doc.getText(range) };
-		} else if (vscode.workspace.getConfiguration('claudeCode').get<boolean>('attachOpenFile') ?? true) {
-			payload = { ...base, endLine: base.startLine }; // With the setting off, Claude Code keeps no chip for a cursor.
+		} else if (attachOpenFile()) {
+			payload = { ...base, endLine: base.startLine };
 		}
-		const targets = [...claudeWebviews];
-		if (!targets.length) {
-			reportOnce('chip', 'no Claude Code webview found yet; the prompt hook note carries the selection.');
-			return;
-		}
-		const message = { type: 'from-extension', message: { type: 'request', channelId: '', requestId: '', request: { type: 'selection_changed', selection: payload } } };
-		const posted = await Promise.all(targets.map(async webview => {
-			try {
-				if (await postToWebview!(webview, message)) {
-					return true;
-				}
-			} catch {
-				// Dropped below.
-			}
-			claudeWebviews.delete(webview);
-			return false;
-		}));
-		if (posted.some(Boolean) && isCurrent()) {
-			chip = { source, key };
-		}
+		await postChip({ source, key }, payload, isCurrent);
 	} catch (err) {
 		reportOnce('chip', `posting the selection to Claude Code failed: ${err instanceof Error ? err.message : String(err)}`);
+	}
+}
+
+/** With the setting off, Claude Code keeps no chip for a cursor. */
+const attachOpenFile = (): boolean => vscode.workspace.getConfiguration('claudeCode').get<boolean>('attachOpenFile') ?? true;
+
+/**
+ * Gives Claude Code's chat panel's chip a selection that is not in a text document, such as a
+ * page of the integrated browser: the page as an opened file when `selectedText` is absent, or
+ * the selected text. The CLI gets nothing from this.
+ */
+export async function deliverToChip(source: object, key: string, selection: ChipSelection, isCurrent: () => boolean): Promise<void> {
+	try {
+		await postChip({ source, key }, selection.selectedText !== undefined || attachOpenFile() ? selection : undefined, isCurrent);
+	} catch (err) {
+		reportOnce('chip', `posting the selection to Claude Code failed: ${err instanceof Error ? err.message : String(err)}`);
+	}
+}
+
+/** Posts the payload to every Claude Code webview as Claude Code does; undefined clears the chip. */
+async function postChip(mark: Mark, payload: ChipSelection | undefined, isCurrent: () => boolean): Promise<void> {
+	if (!postToWebview) {
+		return;
+	}
+	const targets = [...claudeWebviews];
+	if (!targets.length) {
+		reportOnce('chip', 'no Claude Code webview found yet; the prompt hook note carries the selection.');
+		return;
+	}
+	const message = { type: 'from-extension', message: { type: 'request', channelId: '', requestId: '', request: { type: 'selection_changed', selection: payload } } };
+	const posted = await Promise.all(targets.map(async webview => {
+		try {
+			if (await postToWebview!(webview, message)) {
+				return true;
+			}
+		} catch {
+			// Dropped below.
+		}
+		claudeWebviews.delete(webview);
+		return false;
+	}));
+	if (posted.some(Boolean) && isCurrent()) {
+		chip = mark;
 	}
 }
 
