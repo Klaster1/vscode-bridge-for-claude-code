@@ -277,6 +277,21 @@ try {
 		}
 		throw new Error('no SemanticDiff panel with code lines');
 	};
+	/** A point in the padding left of the Markdown Editor's text, in the workbench page's coordinates: a click there is outside the content. */
+	const markdownEditorMargin = async (): Promise<{ page: Page; x: number; y: number }> => {
+		cdp ??= await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+		for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
+			for (const page of cdp.contexts().flatMap(c => c.pages())) {
+				for (const frame of page.frames()) {
+					const box = await frame.locator('.md-document').first().boundingBox({ timeout: 1000 }).catch(() => null);
+					if (box) {
+						return { page, x: box.x - 2, y: box.y + 4 };
+					}
+				}
+			}
+		}
+		throw new Error('no Markdown Editor page with text');
+	};
 	/**
 	 * A point on a code line of the panel, in the workbench page's coordinates: before its first
 	 * character, after its last one, or in the middle of a word. A long line wraps in a narrow
@@ -516,6 +531,25 @@ try {
 		const refocused = await selectionPosts(n => n > beforeRefocus);
 		await check('a Markdown Editor coming to the front sends its selection again', async () =>
 			refocused.length > beforeRefocus && refocused.at(-1)?.request?.selection?.selectedText === notes || `${beforeRefocus} -> ${refocused.length} posts`);
+		// A click outside the text clears the editor's selection. The file stays attached, as it does for a text editor's cursor.
+		const isFileChip = (s: { filePath: string; startLine: number; endLine: number; selectedText?: string } | undefined) =>
+			/notes\.md$/.test(s?.filePath ?? '') && s?.startLine === 1 && s.endLine === 1 && s.selectedText === undefined;
+		{
+			const margin = await markdownEditorMargin();
+			await margin.page.mouse.click(margin.x, margin.y);
+			const clicked = await selectionPosts(n => n > refocused.length);
+			await check('a click outside the Markdown Editor\'s text sends the file to Claude Code', async () =>
+				clicked.length > refocused.length && isFileChip(clicked.at(-1)?.request?.selection) || JSON.stringify(clicked.at(-1)).slice(0, 300));
+		}
+		// A new editor has no selection until a click in its text.
+		{
+			const before = (await selectionPosts(() => true)).length;
+			await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+			await call('execute_command', { command: 'vscode.openWith', args: [{ $uri: 'notes.md' }, 'vscode.markdown.editor'] });
+			const opened = await selectionPosts(n => n > before);
+			await check('a Markdown Editor that has no selection yet sends the file to Claude Code', async () =>
+				opened.length > before && isFileChip(opened.at(-1)?.request?.selection) || JSON.stringify(opened.at(-1)).slice(0, 300));
+		}
 		await call('execute_command', { command: 'standin.close' });
 		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
 		await expectText('markdown_editor_selection, editor closed', 'markdown_editor_selection', {}, /No Markdown Editor is in front/);
