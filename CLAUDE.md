@@ -60,13 +60,13 @@ is `out/extension/main.js` and `out/webview/script.js` in its extension folder,
 
 | Internal | Patch | Where to check |
 |----------|-------|----------------|
-| The `html` getter and setter and `postMessage` on the webview prototype that all extensions share | Markdown Editor and SemanticDiff selection; finding Claude Code's chat webviews | `ExtHostWebview`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
+| The `html` getter and setter and `postMessage` on the webview prototype that all extensions share | SemanticDiff selection; finding Claude Code's chat webviews | `ExtHostWebview`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
 | The `webview` getter on the webview panel prototype that all extensions share, which tells which panel shows a page | SemanticDiff selection: whether its page is in front, in any extension's tab | `ExtHostWebviewPanel`, in VS Code's `src/vs/workbench/api/common/extHostWebviewPanels.ts` |
-| The Markdown Editor page's meta tags (`vscode-markdown-editor-script-nonce`, `-initial-state`, `-message-secret`), and its `acquireVsCodeApi().setState` calls with `selection.anchor` and `selection.active` | Markdown Editor selection | `dist/extension.js` builds the page; `markdown-editor-out/editor.js` runs in it |
+| The Markdown extension's provider for `vscode.markdown.editor`: it registers with `window.registerCustomEditorProvider` on its own `vscode` API object, and its `resolveCustomTextEditorNavigation(document, panel, token)` returns a controller with `selection` and `onDidChangeSelection` (the proposed `customTextEditorNavigation` API, VS Code 1.142+) | Markdown Editor selection | `ExtHostCustomEditors`, in VS Code's `src/vs/workbench/api/common/extHostCustomEditors.ts`; `markdownEditorProvider.ts` and `markdownEditorNavigation.ts` in `extensions/markdown-language-features/src/preview/` |
 | SemanticDiff's page: `<title>SemanticDiff</title>`, `id="old-path"` and `id="new-path"`, and `initialState = JSON.parse(decodeURIComponent("…"))` with `input.original`, `input.modified` and `title`. SemanticDiff reads `panel.webview` in the statement that sets the page, and the page builds itself from `getState()` before `initialState` | SemanticDiff selection | `out/webview/index.html` is the template; search `main.js` for `setWebviewHTML`, and `script.js` for `getState()` |
 | The `SetState` message SemanticDiff posts to its page, with the same `state` fields | SemanticDiff selection | search `main.js` for `"SetState"` |
 | The viewer in SemanticDiff's page: the only class that assigns `this.selectionText`; its `selection` (`start` and `end` as `row`, `line`, `offset`, and `leftSide`, `hasOffset`); `renderer.rows` (`type` 2 with `left` and `right` items `{ canSelect, line.text, code.text }`, `type` 1 for collapsed lines); `renderer.simplifySelection`; and its `updateSelectionText` and `clear` methods | SemanticDiff selection | search `script.js` for `selectionText` and `getSelectionText` |
-| Claude Code's own `vscode` API object, reached with `createRequire` from its `extension.js` | all Claude Code patches | `src/claudeApi.ts` |
+| Claude Code's and the Markdown extension's own `vscode` API objects, reached with `createRequire` from a file of the extension | all Claude Code patches; Markdown Editor selection | `src/extensionApi.ts` |
 | The `selection_changed` request that Claude Code posts to its chat webview, inside `{ type: 'from-extension', message: … }` | the selection chip | search `extension.js` for `selection_changed` |
 | Claude Code's `window.onDidChangeTextEditorSelection` listeners | the selection for the CLI over `/ide` | search `extension.js` for `onDidChangeTextEditorSelection` |
 | Claude Code's chat-link handler: `showTextDocument(uri)`, then `vscode.open` when that rejects | chat links | search `extension.js` for `showTextDocument` |
@@ -92,7 +92,7 @@ SemanticDiff diff, check the selection chip and the CLI over `/ide`, and open a 
   `test/harness.ts`, and start no VS Code.
 - The end-to-end test runs on Windows only, as CI does, because `test/window-helper.ps1` drives
   the VS Code windows through Win32 and UI Automation. On another platform it stops at once with
-  a message. It downloads VS Code 1.140.0 and SemanticDiff 0.10.0 into `.vscode-test/`. It
+  a message. It downloads VS Code 1.143.1 and SemanticDiff 0.10.0 into `.vscode-test/`. It
   starts VS Code with its own user
   data, extensions, discovery folder and Claude Code config, and calls the tools through the
   plugin's launcher and prompt hook, with the command lines from the plugin's manifests. The user's

@@ -13,7 +13,7 @@
 // once, and nothing is patched.
 
 import * as vscode from 'vscode';
-import { claudeCodeApi, claudeCodeId } from './claudeApi.ts';
+import { claudeCodeApi, claudeCodeId } from './extensionApi.ts';
 import { globMatches } from './glob.ts';
 
 const reported = new Set<string>();

@@ -202,7 +202,7 @@ for (const args of [['plugin', 'marketplace', 'add', root], ['plugin', 'install'
 }
 
 const inputs = hashInputs(root); // Before packaging, so the record matches the code the shots show.
-const vscodeVersion = '1.140.0';
+const vscodeVersion = '1.143.1';
 const exe = await downloadAndUnzipVSCode({ version: vscodeVersion, cachePath: join(root, '.vscode-test') });
 keepUrlHandler();
 // Installed from a VSIX, as users get it: --extensionDevelopmentPath would put "[Extension Development Host]" in the title.
@@ -227,6 +227,7 @@ const app = await _electron.launch({
 		'--skip-welcome',
 		'--skip-release-notes',
 		'--new-window',
+		'--enable-proposed-api=klaster1.vscode-bridge-for-claude-code', // Without it the bridge's read of a shared page's selection raises a confirmation dialog over the shot.
 		'--force-device-scale-factor=2', // Same pixels on every display, sharp when GitHub scales the image down.
 		// The windows sit off-screen (below). Chromium would stop painting a window it counts as hidden.
 		'--disable-backgrounding-occluded-windows',

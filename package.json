@@ -9,7 +9,7 @@
   "homepage": "https://github.com/Klaster1/vscode-bridge-for-claude-code#readme",
   "repository": { "type": "git", "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code.git" },
   "bugs": { "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code/issues" },
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,7 @@
     "chatParticipantPrivate"
   ],
   "engines": {
-    "vscode": "^1.140.0"
+    "vscode": "^1.142.0"
   },
   "activationEvents": [
     "*"
@@ -37,7 +37,7 @@
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "Report the text selected in the Markdown Editor and in a SemanticDiff diff: to Claude Code's selection chip, through the `markdown_editor_selection` and `semantic_diff_selection` tools and in the prompt hook's note. Works only while `#vscodeBridge.enabled#` is on. A Markdown Editor or SemanticDiff diff that is open when you turn this on reports its selection after you reopen it, and the Claude Code CLI gets it after a window reload."
+          "markdownDescription": "Report the text selected in the Markdown Editor and in a SemanticDiff diff: to Claude Code's selection chip, through the `markdown_editor_selection` and `semantic_diff_selection` tools and in the prompt hook's note. Works only while `#vscodeBridge.enabled#` is on. After you turn this on, reload the window."
         },
         "vscodeBridge.claudeCode.chatLinks": {
           "type": "boolean",

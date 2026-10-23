@@ -1,5 +1,5 @@
 // End-to-end check in an isolated VS Code, on Windows only: it needs test/window-helper.ps1,
-// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.140.0 into
+// which drives the windows through Win32 and UI Automation. Downloads VS Code 1.143.1 into
 // .vscode-test/, starts it with its own user-data and extensions folders,
 // this extension loaded from source and SemanticDiff 0.10.0 from the marketplace
 // (cached in .vscode-test/), then talks to the bridge through the Claude Code
@@ -81,7 +81,7 @@ const page = createServer((_req, res) => {
 await new Promise<void>(r => page.listen(0, '127.0.0.1', r));
 const pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}/`;
 
-const exe = await downloadAndUnzipVSCode({ version: '1.140.0', cachePath: join(root, '.vscode-test') });
+const exe = await downloadAndUnzipVSCode({ version: '1.143.1', cachePath: join(root, '.vscode-test') });
 keepUrlHandler();
 // SemanticDiff, for the checks of its diff panel's selection. Node's fetch decodes the marketplace's gzip-encoded response.
 const semanticDiffVsix = join(root, '.vscode-test', 'semanticdiff-0.10.0-win32-x64.vsix');
