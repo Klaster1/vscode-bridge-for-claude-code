@@ -482,11 +482,11 @@ const markdownEditorSelectionTool: BridgeTool = {
 	},
 	async call(args) {
 		if (!webviewSelectionRunning()) {
-			return text('The Markdown Editor selection is not being read: vscodeBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reopen the editor.');
+			return text('The Markdown Editor selection is not being read: vscodeBridge.markdownEditor.selection is off, or the output channel says why it could not start. After turning it on, reload the window.');
 		}
 		const maxChars = typeof args['maxChars'] === 'number' ? args['maxChars'] : 4000;
 		const entries: string[] = [];
-		for (const { uri, active, selection, delivered } of await markdownEditorSelections()) {
+		for (const { uri, active, selection, delivered } of markdownEditorSelections()) {
 			const surface = args['skipDeliveredTo'];
 			if ((surface === 'chip' || surface === 'cli') && delivered[surface]) {
 				continue;
@@ -494,7 +494,7 @@ const markdownEditorSelectionTool: BridgeTool = {
 			const name = `${uri.scheme === 'file' ? uri.fsPath : uri.toString()}${active ? ' (active)' : ''}`;
 			if (!selection) {
 				if (args['selectedOnly'] !== true) {
-					entries.push(`- ${name}: no selection reported. Reopen the editor if the bridge started after it opened.`);
+					entries.push(`- ${name}: no selection reported. Reload the window if the bridge started after it opened.`);
 				}
 			} else if (!selection.text) {
 				if (args['selectedOnly'] !== true) {

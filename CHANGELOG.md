@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0] - 2026-10-23
+
+### Changed
+
+- The extension needs VS Code 1.142 or later.
+- After you turn the selection setting on, reload the window to read Markdown Editor selections.
+
 ## [0.7.0] - 2026-10-21
 
 ### Added

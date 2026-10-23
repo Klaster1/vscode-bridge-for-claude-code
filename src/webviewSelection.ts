@@ -1,8 +1,8 @@
 // Gives Claude Code the selection in editors that VS Code shows in a webview, which Claude Code's
-// IDE context does not report: VS Code's Markdown Editor (markdownSelection.ts) and SemanticDiff's
-// diff page (semanticDiffSelection.ts). VS Code has no API for either selection, so this patches
-// the `html` setter that every extension's webviews share. A page handler recognises its page and
-// inserts a script that posts the selection to this extension.
+// IDE context does not report: SemanticDiff's diff page (semanticDiffSelection.ts) and, through
+// deliver(), VS Code's Markdown Editor (markdownSelection.ts). VS Code has no API for the diff's
+// selection, so this patches the `html` setter that every extension's webviews share. A page
+// handler recognises its page and inserts a script that posts the selection to this extension.
 //
 // The `webview` getter that every extension's webview panels share is wrapped too. It tells which
 // panel shows a page, and so whether the page is in front, whatever extension's tab it is in.
@@ -21,7 +21,7 @@
 // off. No error reaches the extension that owns the page.
 
 import * as vscode from 'vscode';
-import { claudeCodeApi } from './claudeApi.ts';
+import { claudeCodeApi } from './extensionApi.ts';
 
 /** One kind of page whose selection the patch reads. */
 export interface PageHandler {
