@@ -227,6 +227,7 @@ const app = await _electron.launch({
 		'--skip-welcome',
 		'--skip-release-notes',
 		'--new-window',
+		'--enable-proposed-api=klaster1.vscode-bridge-for-claude-code', // Without it the bridge's read of a shared page's selection raises a confirmation dialog over the shot.
 		'--force-device-scale-factor=2', // Same pixels on every display, sharp when GitHub scales the image down.
 		// The windows sit off-screen (below). Chromium would stop painting a window it counts as hidden.
 		'--disable-backgrounding-occluded-windows',
