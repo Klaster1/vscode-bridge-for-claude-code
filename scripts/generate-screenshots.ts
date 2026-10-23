@@ -202,7 +202,7 @@ for (const args of [['plugin', 'marketplace', 'add', root], ['plugin', 'install'
 }
 
 const inputs = hashInputs(root); // Before packaging, so the record matches the code the shots show.
-const vscodeVersion = '1.140.0';
+const vscodeVersion = '1.143.1';
 const exe = await downloadAndUnzipVSCode({ version: vscodeVersion, cachePath: join(root, '.vscode-test') });
 keepUrlHandler();
 // Installed from a VSIX, as users get it: --extensionDevelopmentPath would put "[Extension Development Host]" in the title.
