@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { approval, autoApprove, pageSelection, sharedPages } from './browserPages.ts';
 import { browserSelectionDelivered } from './browserSelection.ts';
+import { imageOf } from './imageSelection.ts';
 import { markdownEditorSelections } from './markdownSelection.ts';
 import { semanticDiffSelections } from './semanticDiffSelection.ts';
 import { safeStringify, toolResultToContent } from './render.ts';
@@ -430,9 +431,6 @@ const sharedBrowserPages: BridgeTool = {
 
 // --- visible_images ----------------------------------------------------------
 
-/** The image types Claude Code's Read tool shows as images. */
-const imageFile = /\.(png|jpe?g|gif|webp)$/i;
-
 /**
  * Image files shown in an editor group right now. An image opens in VS Code's
  * image preview, a custom editor, so Claude Code's own IDE context, which
@@ -441,9 +439,8 @@ const imageFile = /\.(png|jpe?g|gif|webp)$/i;
 function visibleImages(): { path: string; active: boolean }[] {
 	const out: { path: string; active: boolean }[] = [];
 	for (const group of vscode.window.tabGroups.all) {
-		const input = group.activeTab?.input;
-		const uri = input instanceof vscode.TabInputCustom || input instanceof vscode.TabInputText ? input.uri : undefined;
-		if (uri?.scheme === 'file' && imageFile.test(uri.path)) {
+		const uri = imageOf(group.activeTab);
+		if (uri) {
 			out.push({ path: uri.fsPath, active: group.isActive });
 		}
 	}

@@ -10,6 +10,7 @@ import type { Socket } from 'node:net';
 import type { PassThrough } from 'node:stream';
 import { createBridgeListener } from './bridgeServer.ts';
 import { installBrowserSelection } from './browserSelection.ts';
+import { installImageSelection } from './imageSelection.ts';
 import { installChatHighlighting } from './chatHighlight.ts';
 import { installChatLinks } from './chatLinks.ts';
 import { installMarkdownSelection } from './markdownSelection.ts';
@@ -86,7 +87,7 @@ const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeBridge
 /** The runtime patches, each switched by its own setting. */
 const patchSettings: [setting: string, install: (report: (message: string) => void) => vscode.Disposable][] = [
 	// The setting keeps its name from before the SemanticDiff page and the browser pages, so existing settings still apply. The browser part feeds the chip through the webview patch.
-	['markdownEditor.selection', report => vscode.Disposable.from(installWebviewSelection(report), addPageHandler(semanticDiffPage), installMarkdownSelection(), installBrowserSelection())],
+	['markdownEditor.selection', report => vscode.Disposable.from(installWebviewSelection(report), addPageHandler(semanticDiffPage), installMarkdownSelection(), installBrowserSelection(), installImageSelection())],
 	['claudeCode.chatLinks', installChatLinks],
 	['claudeCode.syntaxHighlighting', installChatHighlighting],
 ];
