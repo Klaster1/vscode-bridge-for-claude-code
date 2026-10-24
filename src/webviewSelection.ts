@@ -191,6 +191,19 @@ export async function deliverToChip(source: object, key: string, selection: Chip
 	}
 }
 
+/** Clears Claude Code's chat panel's chip when it shows a selection of `source`, as for a closed file. */
+export async function clearChip(source: object): Promise<void> {
+	if (chip?.source !== source) {
+		return;
+	}
+	try {
+		await postChip({ source, key: '' }, undefined, () => true);
+	} catch (err) {
+		reportOnce('chip', `clearing the chip failed: ${err instanceof Error ? err.message : String(err)}`);
+	}
+	chip = undefined;
+}
+
 /** Posts the payload to every Claude Code webview as Claude Code does; undefined clears the chip. */
 async function postChip(mark: Mark, payload: ChipSelection | undefined, isCurrent: () => boolean): Promise<void> {
 	if (!postToWebview) {

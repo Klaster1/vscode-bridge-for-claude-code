@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-10-24
+
+### Added
+
+- The image in front in an editor group shows in Claude Code's selection chip.
+
 ## [0.9.0] - 2026-10-24
 
 ### Added

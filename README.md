@@ -41,7 +41,8 @@ the page toolbar. Claude knows which pages you share, so "this page" needs no ex
 ## Claude sees what you have open
 
 Claude can look at an image file (PNG, JPEG, GIF or WebP) you have in front in an editor group,
-and knows which one, so "this screenshot" needs no path. Text you select in the Markdown Editor
+and knows which one, so "this screenshot" needs no path. The image also shows in Claude Code's
+selection chip, as a text file does. Text you select in the Markdown Editor
 shows in Claude Code's selection chip, and Claude gets it with your prompt, as it does for a text
 editor.
 
@@ -101,7 +102,7 @@ panel. `/ide` needs Claude Code's VS Code extension installed.
 | [`vscodeBridge.executeCommand.allow`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.executeCommand.allow) | `["*"]` | Command IDs `execute_command` may run. `*` matches any run of characters. Only your user settings set it, not a workspace's. |
 | [`vscodeBridge.executeCommand.deny`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.executeCommand.deny) | `[]` | Command IDs it must never run. Deny wins over allow. Only your user settings set it, not a workspace's. |
 | [`vscodeBridge.autoApprove`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
-| [`vscodeBridge.markdownEditor.selection`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.markdownEditor.selection) | `true` | Sends the selection in the Markdown Editor, in SemanticDiff diffs and on shared browser pages to Claude. After you turn it on, reload the window. |
+| [`vscodeBridge.markdownEditor.selection`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.markdownEditor.selection) | `true` | Sends the selection in the Markdown Editor, in SemanticDiff diffs and on shared browser pages, and the image in front, to Claude. After you turn it on, reload the window. |
 | [`vscodeBridge.claudeCode.chatLinks`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
 | [`vscodeBridge.claudeCode.syntaxHighlighting`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.syntaxHighlighting) | `true` | Colors the code blocks in Claude Code's chat with your color theme. After you change it, reload the window. |
 

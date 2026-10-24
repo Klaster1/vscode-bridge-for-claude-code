@@ -64,6 +64,10 @@
       {
         "command": "standin.selections",
         "title": "Stand-in: list the selections its listener received"
+      },
+      {
+        "command": "standin.clearsChip",
+        "title": "Stand-in: clear the chip when no text editor is in front, as Claude Code does"
       }
     ]
   }

@@ -1181,6 +1181,49 @@ ${after.stdout}`);
 		await call('execute_command', { command: 'standin.close' });
 		await setAutoApprove(autoApprove);
 	}
+	// An image in front in VS Code's image preview reaches Claude Code's chip as an opened file, as a text editor does.
+	// Claude Code's own context follows the active text editor, so it shows no chip for an image.
+	{
+		writeFileSync(join(workspace, 'shot.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+		await call('execute_command', { command: 'standin.open' }); // Its first post lets the bridge find it.
+		const imageChipAfter = async (count: number): Promise<ChipPayload | undefined> => {
+			for (const end = Date.now() + 20_000; Date.now() < end; await sleep(500)) {
+				const hit = (await chipSelections()).slice(count).find(s => /shot\.png$/.test(s?.filePath ?? ''));
+				if (hit) {
+					return hit;
+				}
+			}
+			return undefined;
+		};
+		await sleep(2000);
+		const count = (await chipSelections()).length;
+		await call('execute_command', { command: 'vscode.open', args: [{ $uri: 'shot.png' }] });
+		const imageChip = await imageChipAfter(count);
+		await check('an image in front reaches Claude Code as an opened file', async () =>
+			/^file:\/\/\/.*shot\.png$/i.test(imageChip?.sourceUri ?? '') && imageChip?.startLine === 1 && imageChip.endLine === 1 && imageChip.selectedText === undefined || JSON.stringify(imageChip ?? null).slice(0, 300));
+		// Claude Code clears its chip when the text editor goes and no other is visible, and the image goes in front right then:
+		// the image must reach the chip after that clear, and be the last thing it got.
+		await call('execute_command', { command: 'standin.clearsChip', args: [true] });
+		await call('execute_command', { command: 'vscode.open', args: [{ $uri: 'src/use.ts' }] });
+		await sleep(1500);
+		const away = (await chipSelections()).length;
+		await call('execute_command', { command: 'vscode.open', args: [{ $uri: 'shot.png' }] });
+		await imageChipAfter(away);
+		await sleep(1500);
+		const afterText = (await chipSelections()).slice(away);
+		await check('an image in front after a text editor is the last thing in Claude Code\'s chip', async () =>
+			/shot\.png$/.test(afterText.at(-1)?.filePath ?? '') || JSON.stringify(afterText).slice(0, 300));
+		// With no editor left in front, nothing takes the chip over, so the image must leave it.
+		await call('execute_command', { command: 'workbench.action.closeOtherEditors' });
+		const beforeClose = (await chipSelections()).length;
+		await call('execute_command', { command: 'workbench.action.closeActiveEditor' });
+		await sleep(2000);
+		const afterClose = (await chipSelections()).slice(beforeClose);
+		await check('the chip is cleared when the image closes and no editor is left', async () =>
+			afterClose.length > 0 && afterClose.every(s => s === undefined) || JSON.stringify(afterClose).slice(0, 300));
+		await call('execute_command', { command: 'standin.clearsChip', args: [false] });
+		await call('execute_command', { command: 'standin.close' });
+	}
 	for (const name of dialogTools) {
 		// With auto-approve on, a dialog should never appear, so waiting is a failure.
 		results.push({ name, ok: !autoApprove, note: 'WAITING: confirmation dialog not answered within 15 s' + (autoApprove ? ' although autoApprove is on' : ' (expected when nobody is at the screen)') });

@@ -17,6 +17,8 @@ and Claude Code at runtime so that Claude sees what the user has open.
   into the chat page, and the host side that answers the page's requests.
 - `src/textmate.ts`: runs the installed extensions' TextMate grammars with the active color
   theme, as the editor does. It reads VS Code through `Sources`, so an offline check can run it.
+- `src/imageSelection.ts`: gives Claude Code's chip the image in front in the image preview, as an
+  opened file. Claude Code follows the active text editor, so it shows no chip for a custom editor.
 - `src/shell.ts`: quotes a command line for Windows, for `setup.ts` and the tests.
 - `plugin/`: the `vscode-bridge` Claude Code plugin. The repo is its marketplace,
   `.claude-plugin/marketplace.json`. An installed plugin loads only its own files, so all it
@@ -72,6 +74,7 @@ is `out/extension/main.js` and `out/webview/script.js` in its extension folder,
 | The viewer in SemanticDiff's page: the only class that assigns `this.selectionText`; its `selection` (`start` and `end` as `row`, `line`, `offset`, and `leftSide`, `hasOffset`); `renderer.rows` (`type` 2 with `left` and `right` items `{ canSelect, line.text, code.text }`, `type` 1 for collapsed lines); `renderer.simplifySelection`; and its `updateSelectionText` and `clear` methods | SemanticDiff selection | search `script.js` for `selectionText` and `getSelectionText` |
 | Claude Code's and the Markdown extension's own `vscode` API objects, reached with `createRequire` from a file of the extension | all Claude Code patches; Markdown Editor selection | `src/extensionApi.ts` |
 | The `selection_changed` request that Claude Code posts to its chat webview, inside `{ type: 'from-extension', message: … }` | the selection chip | search `extension.js` for `selection_changed` |
+| Claude Code's `window.onDidChangeActiveTextEditor` handler: with no active text editor it clears the chip when no text editor is visible, and keeps it otherwise | the image in the selection chip: it goes again 150 ms after that event | search `extension.js` for `onDidChangeActiveTextEditor` |
 | Claude Code's `window.onDidChangeTextEditorSelection` listeners | the selection for the CLI over `/ide` | search `extension.js` for `onDidChangeTextEditorSelection` |
 | Claude Code's chat-link handler: `showTextDocument(uri)`, then `vscode.open` when that rejects | chat links | search `extension.js` for `showTextDocument` |
 | Claude Code's chat page: `id="claude-error"`, a `script-src 'nonce-…'` in its CSP meta tag, a literal `<head>`, one `acquireVsCodeApi()` call, and code blocks as `pre > code.language-<tag>` that React updates in place | chat code colors | search `extension.js` for `getHtmlForWebview`, and `webview/index.js` for `language-` |
@@ -99,7 +102,8 @@ light: `extension.ts` imports the MCP SDK, the tools and the prompt renderer laz
 
 The tests check the patches against a stand-in, not against Claude Code. After a Claude Code
 update, check them in a real VS Code with Claude Code: select text in a Markdown Editor and in a
-SemanticDiff diff, check the selection chip and the CLI over `/ide`, and open a chat link to a
+SemanticDiff diff, open an image after a text file and check that the chip names it (and goes when
+the image closes with no editor left), check the selection chip and the CLI over `/ide`, and open a chat link to a
 `.md` file. Run `npm run verify-chat-highlighting` as well: it drives the real Claude Code with an
 API stub that streams one reply, and checks the chat code colors in a past session, in a streaming
 reply, in a restored tab and in the side bar. It runs on Windows, on the same terms as

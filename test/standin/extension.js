@@ -9,6 +9,7 @@ const received = [];
 const selections = [];
 let panel;
 let chat;
+let clearsChip = false;
 const chatMessages = [];
 
 // Claude Code's chat page as the bridge sees it: the element for start-up errors, a script nonce in the
@@ -83,6 +84,13 @@ exports.activate = context => {
 		// What Claude Code's selection listener for the CLI reads: the editor's document and selection.
 		vscode.window.onDidChangeTextEditorSelection(e => selections.push({ uri: e.textEditor.document.uri.fsPath, text: e.textEditor.document.getText(e.textEditor.selection) })),
 		vscode.commands.registerCommand('standin.selections', () => selections),
+		// Claude Code clears its chip, in the handler of the event itself, when the active text editor goes and no text editor is visible.
+		vscode.commands.registerCommand('standin.clearsChip', on => { clearsChip = !!on; }),
+		vscode.window.onDidChangeActiveTextEditor(editor => {
+			if (clearsChip && !editor && !vscode.window.visibleTextEditors.length) {
+				panel?.webview.postMessage({ type: 'from-extension', message: { type: 'request', channelId: '', requestId: '', request: { type: 'selection_changed', selection: undefined } } });
+			}
+		}),
 		vscode.commands.registerCommand('standin.open', () => {
 			panel = vscode.window.createWebviewPanel('standin', 'Claude Code stand-in', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableScripts: true, retainContextWhenHidden: true });
 			panel.webview.onDidReceiveMessage(m => {
