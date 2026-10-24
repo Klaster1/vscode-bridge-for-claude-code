@@ -8,17 +8,25 @@
 import * as vscode from 'vscode';
 import type { Socket } from 'node:net';
 import type { PassThrough } from 'node:stream';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createBridgeListener } from './bridgeServer.ts';
 import { installBrowserSelection } from './browserSelection.ts';
 import { installChatLinks } from './chatLinks.ts';
-import { serverInstructions } from './instructions.ts';
 import { installMarkdownSelection } from './markdownSelection.ts';
 import { semanticDiffPage } from './semanticDiffSelection.ts';
-import { allTools } from './tools.ts';
 import { installWebviewSelection } from './webviewSelection.ts';
+
+// The MCP SDK, the tools and the prompt renderer load on first use, not here: loading them took
+// about 9 s in a busy extension host, and the patches must be in place before the Markdown extension
+// registers its editor. test/activation-check.ts guards this.
+const loadMcp = () => Promise.all([
+	import('@modelcontextprotocol/sdk/server/index.js'),
+	import('@modelcontextprotocol/sdk/server/stdio.js'),
+	import('@modelcontextprotocol/sdk/types.js'),
+	import('./instructions.ts'),
+	import('./tools.ts'),
+]);
+let mcpModules: ReturnType<typeof loadMcp> | undefined;
+const mcp = () => mcpModules ??= loadMcp();
 
 let log: vscode.LogOutputChannel;
 const patches = new Map<string, vscode.Disposable>();
@@ -53,6 +61,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Install the patches before returning, so a Markdown Editor or SemanticDiff panel opened right after activation is covered.
 	syncPatches();
 	restart();
+	mcp().catch(err => log.error(`Loading the MCP server failed: ${err instanceof Error ? err.message : String(err)}`)); // Warms the first connection; a connection that finds it failed fails with it.
 	// The pipe is keyed on the first folder, so re-key when the folders change.
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -117,6 +126,7 @@ async function start(): Promise<void> {
 }
 
 async function serveMcp(input: PassThrough, socket: Socket): Promise<void> {
+	const [{ Server }, { StdioServerTransport }, { CallToolRequestSchema, ListToolsRequestSchema }, { serverInstructions }, { allTools }] = await mcp();
 	const server = new Server({ name: 'vscode-bridge-for-claude-code', version }, { capabilities: { tools: {} }, instructions: serverInstructions });
 	const info = () => ({
 		...(bridge.current ? { folder: bridge.current.record.folder, pipe: bridge.current.record.pipe, discoveryFile: bridge.current.file } : {}),

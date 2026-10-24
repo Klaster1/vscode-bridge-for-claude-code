@@ -9,7 +9,7 @@
   "homepage": "https://github.com/Klaster1/vscode-bridge-for-claude-code#readme",
   "repository": { "type": "git", "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code.git" },
   "bugs": { "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code/issues" },
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,8 @@
     "vscode": "^1.142.0"
   },
   "activationEvents": [
-    "*"
+    "*",
+    "onCustomEditor:vscode.markdown.editor"
   ],
   "contributes": {
     "configuration": {
@@ -77,7 +78,7 @@
   "scripts": {
     "setup": "node setup.ts",
     "typecheck": "tsc -p .",
-    "test": "node test/render-check.ts && node test/glob-check.ts && node test/changelog-check.ts && node test/icon-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/semantic-diff-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts",
+    "test": "node test/render-check.ts && node test/glob-check.ts && node test/activation-check.ts && node test/changelog-check.ts && node test/icon-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/semantic-diff-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts && node test/startup-race.ts",
     "icon": "node scripts/generate-icon.ts",
     "prepackage": "npm run icon",
     "package": "vsce package --allow-star-activation --no-rewrite-relative-links",

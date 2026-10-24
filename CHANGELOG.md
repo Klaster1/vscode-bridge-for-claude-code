@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.1] - 2026-10-24
+
+### Fixed
+
+- Read Markdown Editor selections when a restored tab opens the editor at window start.
+
 ## [0.8.0] - 2026-10-23
 
 ### Changed
