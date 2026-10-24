@@ -4,8 +4,9 @@
 // editor, and the controller it returns reports the selection as a Selection in the document.
 // No other extension can read the controller, so this wraps registerCustomEditorProvider on the
 // Markdown extension's own API object and the provider's method, and listens to each controller.
-// The Markdown extension must register after the wrap, so an editor that opened before it is not
-// read until the window reloads.
+// The Markdown extension must register after the wrap. A registration the wrap missed can't be
+// recovered: the provider lives in the Markdown extension's closure, so no Markdown Editor is read
+// until the window reloads. The bridge's activation events make it start before the Markdown extension.
 
 import * as vscode from 'vscode';
 import { extensionApi } from './extensionApi.ts';
@@ -143,7 +144,7 @@ export function installMarkdownSelection(): vscode.Disposable {
 		return { dispose: () => undefined };
 	}
 	if (vscode.extensions.getExtension(markdownExtensionId)?.isActive && !providers.size) {
-		reportOnce('active', 'the Markdown extension was active before the bridge; reload the window to read the selection of its editors.');
+		reportOnce('active', 'the Markdown extension registered its editor before the bridge started, so no Markdown Editor selection is read in this window; reload the window to try again.');
 	}
 	const restores = new Map<Provider, () => void>();
 	const hookOnce = (provider: Provider) => {

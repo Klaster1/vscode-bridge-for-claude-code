@@ -76,7 +76,15 @@ leaves that part off. No error reaches the patched extension. Links then open in
 editor, and the prompt hook still gives Claude the Markdown Editor selection.
 
 The `*` activation event stays: the `onDidChangeTextEditorSelection` wrapper must be in place
-before Claude Code subscribes.
+before Claude Code subscribes. The same goes for the Markdown Editor wrapper, which must be in
+place before the Markdown extension registers its editor. A Markdown Editor tab that VS Code
+restores activates the Markdown extension (`onCustomEditor:vscode.markdown.editor`) before VS Code
+sends `*`, and a registration the wrapper missed is lost until the next reload. So the bridge also
+lists `onCustomEditor:vscode.markdown.editor`: it then starts in the same step as the Markdown
+extension, and first, because VS Code starts extensions in the order of their IDs.
+`test/startup-race.ts` restores a Markdown Editor tab and fails if the wrapper missed the
+registration. `activate()` also stays light: `extension.ts` imports the MCP SDK, the tools and the
+prompt renderer lazily, and `test/activation-check.ts` fails if a static import brings them back.
 
 The tests check the patches against a stand-in, not against Claude Code. After a Claude Code
 update, check them in a real VS Code with Claude Code: select text in a Markdown Editor and in a

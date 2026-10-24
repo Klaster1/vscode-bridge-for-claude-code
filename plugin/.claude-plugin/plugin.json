@@ -1,7 +1,7 @@
 {
   "name": "vscode-bridge",
   "displayName": "VS Code Bridge",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Gives Claude Code the tools and the screen of the VS Code window it works in. Needs the VS Code Bridge for Claude Code extension.",
   "author": {
     "name": "Klaster_1",
