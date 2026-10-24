@@ -63,6 +63,7 @@ const writeSettings = (enabled: boolean) => writeFileSync(settingsFile, JSON.str
 	'workbench.editor.closeEmptyGroups': false, // The bridge's startup panel must leave no empty group behind.
 	'extensions.confirmedUriHandlerExtensionIds': ['klaster1.vscode-bridge-for-claude-code'], // Skips the prompt that a link to an extension raises.
 	'workbench.editorAssociations': { '*.md': 'vscode.markdown.editor' },
+	'workbench.colorTheme': 'Dark Modern', // The chat code colors are checked against this theme's.
 	'chat.agent.enabled': true,
 	'workbench.browser.enableChatTools': true,
 	'vscodeBridge.executeCommand.deny': ['workbench.action.quit'],
@@ -721,6 +722,18 @@ try {
 		await expectText('semantic_diff_selection, the other extension\'s tab closed', 'semantic_diff_selection', {}, /No SemanticDiff panel is in front/);
 	}
 
+	// Each patch has its own setting, which takes effect without a reload.
+	const setSetting = async (key: string, value: boolean) => {
+		overrides[`vscodeBridge.${key}`] = value;
+		writeSettings(true);
+		for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
+			if (textOf(await call('execute_command', { command: 'standin.setting', args: [key] })) === String(value)) {
+				break;
+			}
+		}
+		await sleep(1000);
+	};
+
 	{
 		// Chat links. Claude Code (here the stand-in) opens a link with showTextDocument(uri) and falls back to
 		// vscode.open only when that rejects; the bridge makes it reject for a file that opens in a custom editor.
@@ -746,17 +759,6 @@ try {
 			return result === 'shown' && t.kind === 'text' || `${result}, tab ${JSON.stringify(t)}`;
 		});
 
-		// Each patch has its own setting, which takes effect without a reload.
-		const setSetting = async (key: string, value: boolean) => {
-			overrides[`vscodeBridge.${key}`] = value;
-			writeSettings(true);
-			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
-				if (textOf(await call('execute_command', { command: 'standin.setting', args: [key] })) === String(value)) {
-					break;
-				}
-			}
-			await sleep(1000);
-		};
 		const followLink = async (file: string) => {
 			const via = await openLink(file);
 			await sleep(1500);
@@ -890,6 +892,121 @@ try {
 		openSettingsLink('vscode://klaster1.vscode-bridge-for-claude-code/settings?id=workbench.colorTheme');
 		await sleep(5000);
 		results.push({ name: 'a link to another extension\'s setting is ignored', ok: await activeLabel() !== 'Settings' && /Ignored the link/.test(bridgeLog()), note: `active tab: ${await activeLabel()}` });
+	}
+
+	{
+		// The code blocks in Claude Code's chat. The stand-in's chat page is built like Claude Code's; the bridge's script in it
+		// paints ranges with the CSS Custom Highlight API, one entry per color, named vscb-<hex>.
+		type ChatState = { colors: string[]; blocks: { color: string; text: string }[][]; stale: number; script: boolean };
+		const chatFrame = async (): Promise<Frame | undefined> => {
+			cdp ??= await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+			for (const page of cdp.contexts().flatMap(c => c.pages())) {
+				for (const frame of page.frames()) {
+					if (await frame.locator('#claude-error').count().catch(() => 0)) {
+						return frame;
+					}
+				}
+			}
+			return undefined;
+		};
+		const readChat = `(() => {
+			const codes = [...document.querySelectorAll('pre > code')];
+			const blocks = codes.map(() => []);
+			const colors = [];
+			let stale = 0;
+			for (const [name, highlight] of CSS.highlights) {
+				if (highlight.size) { colors.push(name.replace(/^vscb-/, '').toUpperCase()); }
+				for (const range of highlight) {
+					if (!range.startContainer.isConnected || !range.endContainer.isConnected) { stale++; }
+					const i = codes.findIndex(code => code.contains(range.startContainer));
+					if (i >= 0) { blocks[i].push({ color: name.replace(/^vscb-/, '').toUpperCase(), text: range.toString() }); }
+				}
+			}
+			return { colors, blocks, stale, script: [...document.scripts].some(s => s.textContent.includes('vscb-')) };
+		})()`;
+		/** Polls the chat page until the state passes `done`; resolves with the last state, which is undefined when the page never showed. */
+		const chatUntil = async (done: (s: ChatState) => boolean, ms = 25_000): Promise<ChatState | undefined> => {
+			let state: ChatState | undefined;
+			for (const end = Date.now() + ms; ; await sleep(400)) {
+				state = await (await chatFrame())?.evaluate(readChat).catch(() => undefined) as ChatState | undefined;
+				if ((state && done(state)) || Date.now() > end) {
+					return state;
+				}
+			}
+		};
+		const render = (blocks: { lang: string; text: string }[], replace = false) => call('execute_command', { command: 'standin.render', args: [blocks, replace] });
+		const openChat = () => call('execute_command', { command: 'standin.openChat' }, 60_000);
+		const closeChat = () => call('execute_command', { command: 'standin.closeChat' });
+		const shown = (s: ChatState | undefined) => JSON.stringify(s ?? 'no chat page').slice(0, 400);
+		const withText = (s: ChatState | undefined, block: number, word: string) => s?.blocks[block]?.some(r => r.text.includes(word)) ?? false;
+
+		const typescript = { lang: 'typescript', text: 'const x = 1;' };
+		const python = { lang: 'python', text: 'def f(x):\n    return x + 1' };
+		await openChat();
+		await render([typescript, python]);
+		const dark = await chatUntil(s => s.blocks[0]?.some(r => r.color === '569CD6') === true && (s.blocks[1]?.length ?? 0) > 0);
+		await check('chat code: a TypeScript block gets the keyword color of the active theme, a Python block gets colors', async () =>
+			dark?.blocks[0]?.some(r => r.color === '569CD6' && r.text.trim() === 'const') && (dark.blocks[1]?.length ?? 0) > 0 && dark.colors.includes('569CD6') || shown(dark));
+
+		// A block that streams in: its text changes in place, then the text node is swapped, as React does.
+		const streamed = [
+			'function add(a: number',
+			'function add(a: number, b: number) {\n  return',
+			'function add(a: number, b: number) {\n  const sum = a + b;\n  return sum;\n}',
+		];
+		await render([typescript, python, { lang: 'typescript', text: streamed[0]! }]);
+		const partial = await chatUntil(s => withText(s, 2, 'function'));
+		await check('chat code: a block is colored while it streams in', async () => withText(partial, 2, 'function') || shown(partial));
+		await render([typescript, python, { lang: 'typescript', text: streamed[1]! }]);
+		const grown = await chatUntil(s => withText(s, 2, 'return'));
+		await check('chat code: text that grows in place is colored again', async () => withText(grown, 2, 'return') || shown(grown));
+		await render([typescript, python, { lang: 'typescript', text: streamed[2]! }], true);
+		const swapped = await chatUntil(s => withText(s, 2, 'const') && s.stale === 0);
+		await check('chat code: a replaced text node is colored, and the old node keeps no color', async () => withText(swapped, 2, 'const') && swapped?.stale === 0 || shown(swapped));
+
+		overrides['workbench.colorTheme'] = 'Light Modern';
+		writeSettings(true);
+		const light = await chatUntil(s => s.colors.includes('0000FF') && !s.colors.includes('569CD6') && s.blocks[0]?.some(r => r.color === '0000FF') === true, 40_000);
+		await check('chat code: the colors follow a theme change without a reload', async () =>
+			light?.colors.includes('0000FF') && !light.colors.includes('569CD6') && light.blocks[0]?.some(r => r.color === '0000FF' && r.text.trim() === 'const') || shown(light));
+
+		// A language no extension has a grammar for stays plain, and the blocks after it are colored.
+		const rest = [typescript, python, { lang: 'typescript', text: streamed[2]! }];
+		await render([...rest, { lang: 'nosuchlanguage', text: 'foo bar baz' }, { lang: 'typescript', text: 'let y = 2;' }]);
+		const unknown = await chatUntil(s => (s.blocks[4]?.length ?? 0) > 0);
+		await sleep(1500); // The unknown block's reply is in by now; a late color would show.
+		const unknownLater = await chatUntil(() => true);
+		await check('chat code: a language without a grammar gets no color and the page keeps working', async () =>
+			(unknown?.blocks[4]?.length ?? 0) > 0 && unknownLater?.blocks[3]?.length === 0 && (unknownLater.blocks[0]?.length ?? 0) > 0 || shown(unknownLater));
+
+		await check('chat code: the page\'s requests never reach the extension that owns the page', async () => {
+			const got = JSON.parse(textOf(await call('execute_command', { command: 'standin.chatReceived' }))) as { kind?: string; type?: unknown; data?: { type?: unknown } }[];
+			const bridge = (t: unknown) => typeof t === 'string' && t.startsWith('vscodeBridge.');
+			const leaked = got.filter(m => bridge(m.type) || bridge(m.data?.type));
+			const live = got.some(m => m.kind === 'received'); // The listener works, and the page posted requests (it has colors).
+			return leaked.length === 0 && live && (unknownLater?.colors.length ?? 0) > 0 || `${leaked.length} bridge messages of ${got.length}: ${JSON.stringify(leaked).slice(0, 300)}`;
+		});
+
+		// With the setting off, a page opened afterwards gets no script. The same flow with it on is the control.
+		const freshChat = async () => {
+			await closeChat();
+			await openChat();
+			await render([typescript]);
+		};
+		await setSetting('claudeCode.syntaxHighlighting', false);
+		await freshChat();
+		await sleep(5000); // Long enough for the script to have painted.
+		const off = await chatUntil(() => true);
+		await check('chat code: with the setting off, a new chat page gets no script and no colors', async () =>
+			off && !off.script && off.colors.length === 0 || shown(off));
+		await setSetting('claudeCode.syntaxHighlighting', true);
+		await freshChat();
+		const on = await chatUntil(s => s.colors.length > 0);
+		await check('chat code: with the setting on again, a new chat page is colored', async () => on?.script && on.colors.length > 0 || shown(on));
+
+		await closeChat();
+		delete overrides['workbench.colorTheme'];
+		writeSettings(true);
 	}
 
 	// Terminal: run a command through the keyboard-input command, then read it back.

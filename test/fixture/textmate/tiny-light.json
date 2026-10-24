@@ -1,0 +1,11 @@
+{
+	"colors": {
+		"editor.foreground": "#333333"
+	},
+	"tokenColors": [
+		{ "scope": "keyword.control", "settings": { "foreground": "#AF00DB" } },
+		{ "scope": "string", "settings": { "foreground": "#A31515" } },
+		{ "scope": "constant.numeric", "settings": { "foreground": "#098658" } },
+		{ "scope": "comment", "settings": { "foreground": "#008000", "fontStyle": "italic" } }
+	]
+}

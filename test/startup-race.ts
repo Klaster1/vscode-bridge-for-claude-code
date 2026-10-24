@@ -5,6 +5,10 @@
 // the window the way VS Code does when it quits, starts it again with the tab restored, and reads the
 // bridge's log.
 //
+// The second check is the same race for Claude Code's chat tab: VS Code restores it and starts Claude Code
+// (here the stand-in in test/standin, which has its ID) before it sends `*`, so the bridge must be
+// active by then, or the chat page is set past its patch and its code blocks stay plain.
+//
 //   node test/startup-race.ts
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -14,6 +18,7 @@ import type { AddressInfo } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
+import { chromium } from 'playwright';
 import { check, finish, skip } from './harness.ts';
 
 if (process.platform !== 'win32') {
@@ -24,12 +29,14 @@ if (process.platform !== 'win32') {
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = join(root, '.vscode-test', 'startup');
 const workspace = join(run, 'workspace');
+const chatWorkspace = join(run, 'workspace-chat'); // Its own folder, so the Markdown Editor check's saved tabs stay out of it.
 const userData = join(run, 'user-data');
 rmSync(run, { recursive: true, force: true });
 mkdirSync(join(userData, 'User'), { recursive: true });
 mkdirSync(join(run, 'extensions'), { recursive: true });
 mkdirSync(join(run, 'discovery'), { recursive: true });
 mkdirSync(workspace, { recursive: true });
+mkdirSync(chatWorkspace, { recursive: true });
 writeFileSync(join(workspace, 'notes.md'), '# Notes\n\nSome text to select.\n');
 writeFileSync(join(userData, 'User', 'settings.json'), JSON.stringify({
 	'security.workspace.trust.enabled': false,
@@ -78,11 +85,12 @@ const bridgeLog = (): string => {
 	return file ? readFileSync(file, 'utf8') : '';
 };
 
-/** Starts the window with the bridge from source; `files` open in it. Its window stays off the screen. */
-function start(files: string[]) {
+/** Starts the window with the bridge from source; `files` open in it, and `chat` loads Claude Code's stand-in. Its window stays off the screen. */
+function start(files: string[], chat = false) {
 	const code = spawn(exe, [
-		workspace, ...files,
+		chat ? chatWorkspace : workspace, ...files,
 		`--extensionDevelopmentPath=${root}`,
+		...(chat ? [`--extensionDevelopmentPath=${join(root, 'test', 'standin')}`] : []),
 		`--user-data-dir=${userData}`,
 		`--extensions-dir=${join(run, 'extensions')}`,
 		'--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', '--new-window',
@@ -133,6 +141,66 @@ await check('the Markdown Editor patch is in place when a restored tab starts th
 		const log = bridgeLog();
 		if (/Markdown Editor selection:/.test(log)) {
 			throw new Error(log.split('\n').find(line => /Markdown Editor selection:/.test(line)));
+		}
+	} finally {
+		second.stop();
+	}
+});
+
+/** The chat page's colors: the number of painted ranges, or undefined while the page is not there. */
+async function paintedRanges(): Promise<number | undefined> {
+	const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+	try {
+		for (const page of browser.contexts().flatMap(c => c.pages())) {
+			for (const frame of page.frames()) {
+				if (await frame.locator('#claude-error').count().catch(() => 0)) {
+					return await frame.evaluate('[...CSS.highlights.values()].reduce((n, h) => n + h.size, 0)').catch(() => undefined) as number | undefined;
+				}
+			}
+		}
+		return undefined;
+	} finally {
+		await browser.close().catch(() => undefined); // Disconnects; the window stays.
+	}
+}
+async function untilPainted(): Promise<number | undefined> {
+	let ranges: number | undefined;
+	for (let i = 0; i < 60 && !ranges; i++) {
+		ranges = await paintedRanges().catch(() => undefined);
+		if (!ranges) {
+			await sleep(500);
+		}
+	}
+	return ranges;
+}
+
+await check('the chat page of a restored Claude Code tab is patched', async () => {
+	const flag = join(chatWorkspace, 'open-chat.flag'); // Makes the stand-in open its chat tab in the first launch only.
+	writeFileSync(flag, '');
+	const first = start([], true);
+	try {
+		await until('the bridge starting', () => /Listening on/.test(bridgeLog()));
+		if (!await untilPainted()) {
+			throw new Error('the chat page in the first launch got no colors, so the test cannot tell');
+		}
+		await sleep(3000);
+		await quit();
+		await Promise.race([first.exited, sleep(60_000)]);
+	} finally {
+		first.stop();
+	}
+	rmSync(flag);
+	await sleep(2000);
+	const firstLog = newestLog('VS Code Bridge for Claude Code.log');
+	const second = start([], true); // The chat tab comes back from the first window's saved state.
+	try {
+		await until('the bridge starting again', () => newestLog('VS Code Bridge for Claude Code.log') !== firstLog && /Listening on/.test(bridgeLog()));
+		const exthostLog = readFileSync(newestLog('exthost.log'), 'utf8');
+		if (!/anthropic\.claude-code, startup: false, activationEvent: 'onWebviewPanel:claudeVSCodePanel'/.test(exthostLog)) {
+			throw new Error('the chat tab did not come back and start the stand-in, so the test cannot tell');
+		}
+		if (!await untilPainted()) {
+			throw new Error('the restored chat page has no colors');
 		}
 	} finally {
 		second.stop();

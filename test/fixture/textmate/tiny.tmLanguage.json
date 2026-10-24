@@ -1,0 +1,10 @@
+{
+	"scopeName": "source.tiny",
+	"patterns": [
+		{ "name": "comment.block", "begin": "/\\*", "end": "\\*/" },
+		{ "name": "comment.line", "match": "//.*$" },
+		{ "name": "string.quoted.double", "match": "\"(?:[^\"\\\\]|\\\\.)*\"" },
+		{ "name": "constant.numeric", "match": "\\b\\d+\\b" },
+		{ "name": "keyword.control", "match": "\\b(?:if|return)\\b" }
+	]
+}

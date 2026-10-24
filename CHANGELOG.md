@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0] - 2026-10-24
+
+### Added
+
+- Code blocks in Claude Code's chat get the colors of your editor and your color theme.
+- The setting `vscodeBridge.claudeCode.syntaxHighlighting` turns the chat code colors off.
+
 ## [0.8.1] - 2026-10-24
 
 ### Fixed
