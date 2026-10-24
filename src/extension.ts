@@ -10,10 +10,11 @@ import type { Socket } from 'node:net';
 import type { PassThrough } from 'node:stream';
 import { createBridgeListener } from './bridgeServer.ts';
 import { installBrowserSelection } from './browserSelection.ts';
+import { installChatHighlighting } from './chatHighlight.ts';
 import { installChatLinks } from './chatLinks.ts';
 import { installMarkdownSelection } from './markdownSelection.ts';
 import { semanticDiffPage } from './semanticDiffSelection.ts';
-import { installWebviewSelection } from './webviewSelection.ts';
+import { addPageHandler, installWebviewSelection } from './webviewSelection.ts';
 
 // The MCP SDK, the tools and the prompt renderer load on first use, not here: loading them took
 // about 9 s in a busy extension host, and the patches must be in place before the Markdown extension
@@ -85,8 +86,9 @@ const isEnabled = (): boolean => vscode.workspace.getConfiguration('vscodeBridge
 /** The runtime patches, each switched by its own setting. */
 const patchSettings: [setting: string, install: (report: (message: string) => void) => vscode.Disposable][] = [
 	// The setting keeps its name from before the SemanticDiff page and the browser pages, so existing settings still apply. The browser part feeds the chip through the webview patch.
-	['markdownEditor.selection', report => vscode.Disposable.from(installWebviewSelection(report, [semanticDiffPage]), installMarkdownSelection(), installBrowserSelection())],
+	['markdownEditor.selection', report => vscode.Disposable.from(installWebviewSelection(report), addPageHandler(semanticDiffPage), installMarkdownSelection(), installBrowserSelection())],
 	['claudeCode.chatLinks', installChatLinks],
+	['claudeCode.syntaxHighlighting', installChatHighlighting],
 ];
 
 /** Installs or removes each patch to match its setting; `removeAll` removes them regardless. */

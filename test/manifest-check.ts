@@ -19,9 +19,21 @@ await check('the package script allows the * activation event, so vsce does not 
 	assert.match(manifest.scripts['package'] ?? '', /--allow-star-activation/);
 });
 
-const vsixFiles = execFileSync(process.execPath, [join(root, 'node_modules', '@vscode', 'vsce', 'vsce'), 'ls'], { cwd: root, encoding: 'utf8' })
+// An extension that another extension's start activates must be active before it: the Markdown extension, when a Markdown Editor tab comes back, and Claude Code, when its chat tab or side bar view does. test/startup-race.ts and scripts/verify-chat-highlighting.ts show the failure.
+await check('the bridge activates on the events that start the extensions it patches', () => {
+	for (const event of ['onCustomEditor:vscode.markdown.editor', 'onWebviewPanel:claudeVSCodePanel', 'onView:claudeVSCodeSidebar', 'onView:claudeVSCodeSidebarSecondary']) {
+		assert.ok(manifest.activationEvents.includes(event), `package.json has no ${event} activation event`);
+	}
+});
+
+const allFiles = execFileSync(process.execPath, [join(root, 'node_modules', '@vscode', 'vsce', 'vsce'), 'ls'], { cwd: root, encoding: 'utf8' })
 	.split(/\r?\n/)
-	.filter(path => path && !path.startsWith('node_modules/'));
+	.filter(Boolean);
+const vsixFiles = allFiles.filter(path => !path.startsWith('node_modules/'));
+
+await check('the VSIX holds the WebAssembly file the tokenizer loads', () => {
+	assert.ok(allFiles.includes('node_modules/vscode-oniguruma/release/onig.wasm'));
+});
 
 await check('the VSIX holds only tracked files and node_modules', () => {
 	const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0'));

@@ -9,7 +9,7 @@
   "homepage": "https://github.com/Klaster1/vscode-bridge-for-claude-code#readme",
   "repository": { "type": "git", "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code.git" },
   "bugs": { "url": "https://github.com/Klaster1/vscode-bridge-for-claude-code/issues" },
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -22,7 +22,10 @@
   },
   "activationEvents": [
     "*",
-    "onCustomEditor:vscode.markdown.editor"
+    "onCustomEditor:vscode.markdown.editor",
+    "onWebviewPanel:claudeVSCodePanel",
+    "onView:claudeVSCodeSidebar",
+    "onView:claudeVSCodeSidebarSecondary"
   ],
   "contributes": {
     "configuration": {
@@ -45,6 +48,12 @@
           "default": true,
           "scope": "window",
           "markdownDescription": "Open the file links in Claude Code's chat in the editor that VS Code picks for the file, such as the Markdown Editor for `.md`. Works only while `#vscodeBridge.enabled#` is on."
+        },
+        "vscodeBridge.claudeCode.syntaxHighlighting": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Color the code blocks in Claude Code's chat as the editor does, with the grammars of your extensions and your color theme. Works only while `#vscodeBridge.enabled#` is on. After you change it, reload the window."
         },
         "vscodeBridge.autoApprove": {
           "type": "boolean",
@@ -78,16 +87,19 @@
   "scripts": {
     "setup": "node setup.ts",
     "typecheck": "tsc -p .",
-    "test": "node test/render-check.ts && node test/glob-check.ts && node test/activation-check.ts && node test/changelog-check.ts && node test/icon-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/semantic-diff-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts && node test/startup-race.ts",
+    "test": "node test/render-check.ts && node test/glob-check.ts && node test/activation-check.ts && node test/textmate-check.ts && node test/changelog-check.ts && node test/icon-check.ts && node test/discovery-check.ts && node test/bridge-server-check.ts && node test/shell-check.ts && node test/plugin-check.ts && node test/manifest-check.ts && node test/semantic-diff-check.ts && node test/screenshot-inputs-check.ts && node test/run.ts && node test/startup-race.ts",
     "icon": "node scripts/generate-icon.ts",
     "prepackage": "npm run icon",
     "package": "vsce package --allow-star-activation --no-rewrite-relative-links",
     "screenshots": "node scripts/generate-screenshots.ts",
-    "check-screenshots": "node scripts/check-screenshots.ts"
+    "check-screenshots": "node scripts/check-screenshots.ts",
+    "verify-chat-highlighting": "node scripts/verify-chat-highlighting.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@vscode/prompt-tsx": "^0.4.0-alpha.9"
+    "@vscode/prompt-tsx": "^0.4.0-alpha.9",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
