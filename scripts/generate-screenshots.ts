@@ -98,28 +98,58 @@ writeFileSync(join(claudeConfig, '.claude.json'), JSON.stringify({
 }, null, 2));
 writeFileSync(join(claudeConfig, 'settings.json'), JSON.stringify({ theme: 'light', prefersReducedMotion: true }, null, 2));
 
-// A past session with a file link, which the chat-link shot opens, so no shot needs a model reply.
-// The panel lists the sessions in this folder, named after the cwd with each non-alphanumeric as '-'.
-const sessionId = '5f0c2a8e-7d41-4b6a-9e3f-2c8d1a7b6e40';
-{
+// Past sessions, which the chat shots open, so no shot needs a model reply. The panel lists the
+// sessions in this folder, named after the cwd with each non-alphanumeric as '-'.
+const seedSession = (sessionId: string, uuidPrefix: string, question: string, reply: string) => {
 	const base = { isSidechain: false, userType: 'external', entrypoint: 'claude-vscode', cwd: workspace, sessionId, version: claudeCodeVersion };
-	const question = 'Where is the forecast cache documented?';
+	const asked = `${uuidPrefix}-0000-4000-8000-000000000001`, answered = `${uuidPrefix}-0000-4000-8000-000000000002`;
 	const records = [
-		{ ...base, parentUuid: null, type: 'user', uuid: 'a1000000-0000-4000-8000-000000000001', timestamp: '2026-10-01T09:00:00.000Z', message: { role: 'user', content: question } },
+		{ ...base, parentUuid: null, type: 'user', uuid: asked, timestamp: '2026-10-01T09:00:00.000Z', message: { role: 'user', content: question } },
 		{
-			...base, parentUuid: 'a1000000-0000-4000-8000-000000000001', type: 'assistant', uuid: 'a1000000-0000-4000-8000-000000000002', timestamp: '2026-10-01T09:00:05.000Z',
+			...base, parentUuid: asked, type: 'assistant', uuid: answered, timestamp: '2026-10-01T09:00:05.000Z',
 			message: {
 				id: 'msg_screenshot', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null,
 				usage: { input_tokens: 0, output_tokens: 0 },
-				content: [{ type: 'text', text: 'The "Caching" section of [forecast-api.md](docs/forecast-api.md) covers it: a forecast stays in the cache for ten minutes. The code is in [forecast.ts](src/forecast.ts).' }],
+				content: [{ type: 'text', text: reply }],
 			},
 		},
-		{ type: 'last-prompt', lastPrompt: question, leafUuid: 'a1000000-0000-4000-8000-000000000002', sessionId },
+		{ type: 'last-prompt', lastPrompt: question, leafUuid: answered, sessionId },
 	];
 	const folder = join(claudeConfig, 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'));
 	mkdirSync(folder, { recursive: true });
 	writeFileSync(join(folder, `${sessionId}.jsonl`), records.map(r => JSON.stringify(r)).join('\n') + '\n');
-}
+};
+// A reply with a file link, for the chat-link shot.
+seedSession('5f0c2a8e-7d41-4b6a-9e3f-2c8d1a7b6e40', 'a1000000', 'Where is the forecast cache documented?',
+	'The "Caching" section of [forecast-api.md](docs/forecast-api.md) covers it: a forecast stays in the cache for ten minutes. The code is in [forecast.ts](src/forecast.ts).');
+// A reply with code blocks, for the syntax highlighting shot.
+const fence = '```';
+const codeQuestion = 'Show the forecast cache code.';
+seedSession('8b3e5d71-4a92-4c0f-b6d8-1e7f9a2c4d63', 'a2000000', codeQuestion, [
+	'The cache lives in forecast.ts. A forecast stays in it for ten minutes:',
+	'',
+	`${fence}typescript`,
+	'const cacheMs = 10 * 60 * 1000; // Ten minutes.',
+	'',
+	'export async function forecast(city: string): Promise<HourlyForecast[]> {',
+	'  const hit = cache.get(city);',
+	'  if (hit && Date.now() - hit.at < cacheMs) {',
+	'    return hit.hours;',
+	'  }',
+	'  const response = await fetch(`/forecast?city=${encodeURIComponent(city)}`);',
+	'  const hours = (await response.json()) as HourlyForecast[];',
+	'  cache.set(city, { at: Date.now(), hours });',
+	'  return hours;',
+	'}',
+	fence,
+	'',
+	'To keep a forecast for five minutes, change one line:',
+	'',
+	`${fence}diff`,
+	'-const cacheMs = 10 * 60 * 1000; // Ten minutes.',
+	'+const cacheMs = 5 * 60 * 1000; // Five minutes.',
+	fence,
+].join('\n'));
 
 writeFileSync(join(userData, 'User', 'settings.json'), JSON.stringify({
 	'workbench.colorTheme': 'Default Light Modern',
@@ -493,6 +523,28 @@ try {
 		const level = heading.ring.y + heading.ring.height / 2;
 		return [link, heading, { arrow: { from: [down, link.ring.y + link.ring.height + 3], via: [[down, below], [lane, below], [lane, level]], to: [heading.ring.x - 5, level] } }];
 	});
+	await command('workbench.action.closeAllGroups');
+
+	// Colored code blocks in Claude Code's chat.
+	await openClaudePanel();
+	await command('workbench.action.joinAllGroups'); // Claude Code's locked group outlives closeAllGroups, as an empty group beside the chat.
+	const coded = await frameWith('[aria-label="Send message"]'); // The move can replace the chat's frame.
+	await coded.getByRole('button', { name: 'Session history' }).click();
+	await coded.getByText(codeQuestion).first().click();
+	await coded.locator('pre > code[class*="language-"]').first().waitFor();
+	type HighlightGlobals = { CSS: { highlights: { size: number } } };
+	for (const end = Date.now() + 30_000; ; await sleep(250)) { // The colors are CSS highlights, painted after the page loads the grammars.
+		if (await coded.evaluate(() => (globalThis as unknown as HighlightGlobals).CSS.highlights.size) > 0) {
+			break;
+		}
+		if (Date.now() > end) {
+			throw new Error('The chat painted no code colors.');
+		}
+	}
+	await coded.getByRole('button', { name: 'Send message' }).and(coded.locator('[data-permission-mode="auto"]')).waitFor();
+	await coded.locator('pre').first().scrollIntoViewIfNeeded();
+	await coded.evaluate(() => (globalThis as unknown as { document: { activeElement: { blur(): void } | null } }).document.activeElement?.blur()); // The moved chat keeps focus in its input, which draws a red border.
+	await shoot('chat-syntax-highlighting.png', [editorPart]);
 	await command('workbench.action.closeAllGroups');
 
 	// The CLI in the terminal, connected to the window, with the Markdown Editor's selection.

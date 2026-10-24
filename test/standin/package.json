@@ -7,8 +7,28 @@
     "vscode": "^1.140.0"
   },
   "main": "./extension.js",
+  "activationEvents": [
+    "onWebviewPanel:claudeVSCodePanel",
+    "workspaceContains:open-chat.flag"
+  ],
   "contributes": {
     "commands": [
+      {
+        "command": "standin.openChat",
+        "title": "Stand-in: open a chat page built like Claude Code's"
+      },
+      {
+        "command": "standin.render",
+        "title": "Stand-in: render code blocks in the chat page"
+      },
+      {
+        "command": "standin.chatReceived",
+        "title": "Stand-in: list the messages the chat page posted"
+      },
+      {
+        "command": "standin.closeChat",
+        "title": "Stand-in: close the chat page"
+      },
       {
         "command": "standin.open",
         "title": "Stand-in: open the chat webview"

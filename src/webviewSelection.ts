@@ -34,8 +34,26 @@ export interface PageHandler {
 	seen?(webview: vscode.Webview): void;
 	/** Runs when the tabs or tab groups change; `closed` says a tab was closed. */
 	tabsChanged?(closed: boolean): void;
+	/** Takes a message the page's own script posted; true when the message was the handler's, so that no listener of the extension that owns the page sees it. */
+	receive?(webview: vscode.Webview, message: unknown): boolean;
+	/** Set on a handler that reads a selection, which the selection tools report on. */
+	reportsSelection?: true;
 	/** Forgets the handler's pages when the patch is removed. */
 	clear(): void;
+}
+
+const pageHandlers: PageHandler[] = [];
+
+/** Makes the patch call the handler for the pages it matches; dispose to stop. The patch itself comes from installWebviewSelection. */
+export function addPageHandler(handler: PageHandler): vscode.Disposable {
+	pageHandlers.push(handler);
+	return new vscode.Disposable(() => {
+		const index = pageHandlers.indexOf(handler);
+		if (index >= 0) {
+			pageHandlers.splice(index, 1);
+			handler.clear();
+		}
+	});
 }
 
 /** A selection in a document, as Claude Code gets one from a text editor. */
@@ -216,11 +234,72 @@ function findOwner(start: object | null, name: string): { owner: object; descrip
 	return undefined;
 }
 
+
+/** The message emitters whose `fire` is wrapped, each with the way back. */
+const connected = new Map<object, () => void>();
+
 /**
- * Starts reading the selections of the handlers' pages; dispose to restore the `html` setter and
- * `postMessage`. A webview shows the patched page for as long as it lives.
+ * Gives a handler the messages its page's script posts. The extension host delivers every message
+ * of a webview through `fire` on the webview's emitter, so wrapping `fire` on this webview takes
+ * the handler's messages out before any listener sees them, whenever the listener registered.
  */
-export function installWebviewSelection(report: (message: string) => void, handlers: PageHandler[]): vscode.Disposable {
+function connect(webview: vscode.Webview): void {
+	const emitter = (webview as unknown as { _onMessageEmitter?: { fire?: (message: unknown) => unknown } })._onMessageEmitter;
+	const fire = emitter?.fire;
+	if (!emitter || typeof fire !== 'function') {
+		reportOnce('receive', 'the webview has no message emitter to wrap; a handler\'s page messages also reach the extension that owns the page.');
+		webview.onDidReceiveMessage(message => void pageHandlers.some(h => h.receive?.(webview, message)));
+		return;
+	}
+	if (connected.has(emitter)) {
+		return;
+	}
+	const wrapped = function (this: unknown, message: unknown): unknown {
+		if (running) {
+			for (const handler of [...pageHandlers]) {
+				try {
+					if (handler.receive?.(webview, message)) {
+						return undefined;
+					}
+				} catch (err) {
+					reportOnce('receive', `a handler failed on a page message: ${err instanceof Error ? err.message : String(err)}`);
+				}
+			}
+		}
+		return fire.call(this, message);
+	};
+	emitter.fire = wrapped;
+	connected.set(emitter, () => {
+		if (emitter.fire === wrapped) {
+			delete emitter.fire; // Back to the emitter class's method.
+		}
+	});
+}
+
+let shared: { users: number; stop: () => void } | undefined;
+
+/**
+ * Patches the webview prototypes so that the page handlers (addPageHandler) see the pages and the
+ * messages; dispose to restore them. The patch is shared: it stays while any user holds it. A
+ * webview shows the patched page for as long as it lives.
+ */
+export function installWebviewSelection(report: (message: string) => void): vscode.Disposable {
+	if (!shared) {
+		const patch = startPatch(report);
+		shared = { users: 0, stop: () => patch.dispose() };
+	}
+	shared.users++;
+	let released = false;
+	return new vscode.Disposable(() => {
+		if (!released && --shared!.users === 0) {
+			shared!.stop();
+			shared = undefined;
+		}
+		released = true;
+	});
+}
+
+function startPatch(report: (message: string) => void): vscode.Disposable {
 	log = report;
 	// Every extension's webviews share one prototype, so a throwaway panel gives access to the setter the other extensions use. It opens in the active group: a new group would stay behind when workbench.editor.closeEmptyGroups is off.
 	const panel = vscode.window.createWebviewPanel('vscodeBridge.probe', 'VS Code Bridge for Claude Code', { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {});
@@ -241,8 +320,11 @@ export function installWebviewSelection(report: (message: string) => void, handl
 			let page = value;
 			if (active && typeof value === 'string') {
 				try {
-					const handler = handlers.find(h => h.matches(value));
+					const handler = pageHandlers.find(h => h.matches(value));
 					page = handler ? handler.patch(this, value) : value;
+					if (handler?.receive && page !== value) {
+						connect(this);
+					}
 				} catch (err) {
 					reportOnce('patch', `patching the page failed: ${err instanceof Error ? err.message : String(err)}`);
 				}
@@ -255,7 +337,7 @@ export function installWebviewSelection(report: (message: string) => void, handl
 	readHtml = webview => descriptor.get?.call(webview);
 	writeHtml = (webview, page) => patched.set!.call(webview, page);
 	const see = (webview: vscode.Webview) => {
-		for (const handler of handlers) {
+		for (const handler of [...pageHandlers]) {
 			try {
 				handler.seen?.(webview);
 			} catch (err) {
@@ -309,7 +391,7 @@ export function installWebviewSelection(report: (message: string) => void, handl
 				}
 				if (active) {
 					see(this);
-					for (const handler of handlers) {
+					for (const handler of [...pageHandlers]) {
 						try {
 							handler.posted?.(this, message);
 						} catch (err) {
@@ -363,7 +445,7 @@ export function installWebviewSelection(report: (message: string) => void, handl
 	}
 
 	const tabsChanged = (closed: boolean) => {
-		for (const handler of handlers) {
+		for (const handler of [...pageHandlers]) {
 			try {
 				handler.tabsChanged?.(closed);
 			} catch (err) {
@@ -386,7 +468,6 @@ export function installWebviewSelection(report: (message: string) => void, handl
 			active = false;
 			running = false;
 			disposables.forEach(d => d.dispose());
-			handlers.forEach(h => h.clear());
 			claudeWebviews.clear();
 			selectionListeners.clear();
 			chip = undefined;
@@ -402,6 +483,8 @@ export function installWebviewSelection(report: (message: string) => void, handl
 			if (Object.getOwnPropertyDescriptor(owner, 'html')?.set === patched.set) {
 				Object.defineProperty(owner, 'html', descriptor);
 			}
+			connected.forEach(restore => restore());
+			connected.clear();
 			restoreListen?.();
 			if (post && patchedPost && Object.getOwnPropertyDescriptor(post.owner, 'postMessage')?.value === patchedPost.value) {
 				Object.defineProperty(post.owner, 'postMessage', post.descriptor);
@@ -411,4 +494,4 @@ export function installWebviewSelection(report: (message: string) => void, handl
 }
 
 /** Whether the patch is installed; without it no selection is read. */
-export const webviewSelectionRunning = (): boolean => running;
+export const webviewSelectionRunning = (): boolean => running && pageHandlers.some(h => h.reportsSelection);

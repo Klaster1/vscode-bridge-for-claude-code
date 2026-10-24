@@ -13,6 +13,10 @@ and Claude Code at runtime so that Claude sees what the user has open.
 - `src/tools.ts`: the MCP tools. Some use the stable API. The rest forward VS Code's and
   Copilot's language-model tools from `vscode.lm.tools`. `src/render.ts` turns their
   prompt-tsx results into text.
+- `src/chatHighlight.ts`: colors the code blocks in Claude Code's chat: the script it inserts
+  into the chat page, and the host side that answers the page's requests.
+- `src/textmate.ts`: runs the installed extensions' TextMate grammars with the active color
+  theme, as the editor does. It reads VS Code through `Sources`, so an offline check can run it.
 - `src/shell.ts`: quotes a command line for Windows, for `setup.ts` and the tests.
 - `plugin/`: the `vscode-bridge` Claude Code plugin. The repo is its marketplace,
   `.claude-plugin/marketplace.json`. An installed plugin loads only its own files, so all it
@@ -70,6 +74,9 @@ is `out/extension/main.js` and `out/webview/script.js` in its extension folder,
 | The `selection_changed` request that Claude Code posts to its chat webview, inside `{ type: 'from-extension', message: … }` | the selection chip | search `extension.js` for `selection_changed` |
 | Claude Code's `window.onDidChangeTextEditorSelection` listeners | the selection for the CLI over `/ide` | search `extension.js` for `onDidChangeTextEditorSelection` |
 | Claude Code's chat-link handler: `showTextDocument(uri)`, then `vscode.open` when that rejects | chat links | search `extension.js` for `showTextDocument` |
+| Claude Code's chat page: `id="claude-error"`, a `script-src 'nonce-…'` in its CSP meta tag, a literal `<head>`, one `acquireVsCodeApi()` call, and code blocks as `pre > code.language-<tag>` that React updates in place | chat code colors | search `extension.js` for `getHtmlForWebview`, and `webview/index.js` for `language-` |
+| The webview object's `_onMessageEmitter`: the extension host delivers every message of a page through its `fire` | chat code colors: the page's requests never reach Claude Code | `ExtHostWebview` and `ExtHostWebviews.$onMessage`, in VS Code's `src/vs/workbench/api/common/extHostWebview.ts` |
+| An extension's `contributes.languages`, `contributes.grammars` and `contributes.themes` (theme files with `include` and `tokenColors`), and `vscode-textmate`'s `EncodedTokenAttributes` bit layout | chat code colors | `src/textmate.ts`; VS Code's `src/vs/workbench/services/themes/` and `vscode-textmate`'s `src/encodedTokenAttributes.ts` |
 
 When an internal is missing or has changed, the patch logs it once in the output channel and
 leaves that part off. No error reaches the patched extension. Links then open in the text
@@ -77,19 +84,26 @@ editor, and the prompt hook still gives Claude the Markdown Editor selection.
 
 The `*` activation event stays: the `onDidChangeTextEditorSelection` wrapper must be in place
 before Claude Code subscribes. The same goes for the Markdown Editor wrapper, which must be in
-place before the Markdown extension registers its editor. A Markdown Editor tab that VS Code
-restores activates the Markdown extension (`onCustomEditor:vscode.markdown.editor`) before VS Code
-sends `*`, and a registration the wrapper missed is lost until the next reload. So the bridge also
-lists `onCustomEditor:vscode.markdown.editor`: it then starts in the same step as the Markdown
-extension, and first, because VS Code starts extensions in the order of their IDs.
-`test/startup-race.ts` restores a Markdown Editor tab and fails if the wrapper missed the
-registration. `activate()` also stays light: `extension.ts` imports the MCP SDK, the tools and the
-prompt renderer lazily, and `test/activation-check.ts` fails if a static import brings them back.
+place before the Markdown extension registers its editor, and for the chat page patch, which must be in
+place before Claude Code sets its page. A Markdown Editor tab that VS Code restores activates the
+Markdown extension (`onCustomEditor:vscode.markdown.editor`), and a chat tab or side bar view
+activates Claude Code (`onWebviewPanel:claudeVSCodePanel`, `onView:claudeVSCodeSidebar`,
+`onView:claudeVSCodeSidebarSecondary`), before VS Code sends `*`. A registration the wrapper
+missed is lost until the next reload. So the bridge lists these events too: it then starts in
+the same step, and VS Code waits for every extension on an event before it restores the tab. For
+the Markdown extension the bridge must also start first, which it does because VS Code starts
+extensions in the order of their IDs. `test/startup-race.ts` restores a Markdown Editor tab and
+a Claude Code stand-in's chat tab, and fails if the patch missed either. `activate()` also stays
+light: `extension.ts` imports the MCP SDK, the tools and the prompt renderer lazily, and
+`test/activation-check.ts` fails if a static import brings them back.
 
 The tests check the patches against a stand-in, not against Claude Code. After a Claude Code
 update, check them in a real VS Code with Claude Code: select text in a Markdown Editor and in a
 SemanticDiff diff, check the selection chip and the CLI over `/ide`, and open a chat link to a
-`.md` file.
+`.md` file. Run `npm run verify-chat-highlighting` as well: it drives the real Claude Code with an
+API stub that streams one reply, and checks the chat code colors in a past session, in a streaming
+reply, in a restored tab and in the side bar. It runs on Windows, on the same terms as
+`npm run screenshots`, and it makes no model call.
 
 ## Tests
 

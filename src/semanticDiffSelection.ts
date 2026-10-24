@@ -322,6 +322,7 @@ function patchLate(webview: vscode.Webview): boolean {
 }
 
 export const semanticDiffPage: PageHandler = {
+	reportsSelection: true,
 	matches: isSemanticDiffPage,
 	patch: patchPage,
 	posted(webview, message) {

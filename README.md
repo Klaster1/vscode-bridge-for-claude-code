@@ -9,6 +9,7 @@ A VS Code extension and a Claude Code plugin. Claude Code sees what you see in V
 - **Your selection:** text you select in the Markdown Editor, in a SemanticDiff diff or on a shared browser page, and the image in front, reach Claude with your prompt ([microsoft/vscode#271104](https://github.com/microsoft/vscode/issues/271104)).
 - **VS Code's tools:** type errors, rename, go to definition and any command, as an MCP server.
 - **Chat links:** a file link in Claude Code's chat opens in the editor you chose (fixes [anthropics/claude-code#81482](https://github.com/anthropics/claude-code/issues/81482)).
+- **Code in the chat:** the code blocks in Claude Code's chat get your editor's colors (fixes [anthropics/claude-code#64968](https://github.com/anthropics/claude-code/issues/64968)).
 
 You need VS Code 1.142 or later, Node 22.18 or later and Claude Code. [Install](#install) the extension and the plugin, then start `claude` in a folder of the VS Code window.
 
@@ -67,6 +68,20 @@ from an extension. Without the bridge, Claude Code opens every link in the text 
 
 A link to a line or a heading opens the file at the top.
 
+## Code blocks in the chat have your editor's colors
+
+Claude Code shows the code blocks in its chat as plain text
+([anthropics/claude-code#64968](https://github.com/anthropics/claude-code/issues/64968)). With the
+bridge, a block that has a language tag, such as `typescript` or `diff`, gets the colors of your
+color theme and the grammars of your extensions. It looks as it does in the editor.
+
+![A TypeScript block and a diff block in Claude Code's chat, with colors](docs/screenshots/chat-syntax-highlighting.png)
+
+The colors appear while an answer is still arriving, and they follow a change of your color
+theme. To color a language, install an extension for it. After you change
+[`vscodeBridge.claudeCode.syntaxHighlighting`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.syntaxHighlighting),
+reload the window.
+
 ## The Claude Code CLI
 
 You can also run `claude` in a terminal and connect it to VS Code with `/ide`. Claude then has
@@ -88,6 +103,7 @@ panel. `/ide` needs Claude Code's VS Code extension installed.
 | [`vscodeBridge.autoApprove`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.autoApprove) | `true` | Skips the browser confirmation dialog. |
 | [`vscodeBridge.markdownEditor.selection`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.markdownEditor.selection) | `true` | Sends the selection in the Markdown Editor, in SemanticDiff diffs and on shared browser pages to Claude. After you turn it on, reload the window. |
 | [`vscodeBridge.claudeCode.chatLinks`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.chatLinks) | `true` | Opens chat links in the editor you chose. A change takes effect without a reload. |
+| [`vscodeBridge.claudeCode.syntaxHighlighting`](vscode://klaster1.vscode-bridge-for-claude-code/settings?id=vscodeBridge.claudeCode.syntaxHighlighting) | `true` | Colors the code blocks in Claude Code's chat with your color theme. After you change it, reload the window. |
 
 To keep Claude from closing the window, for example:
 

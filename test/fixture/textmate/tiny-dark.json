@@ -1,0 +1,13 @@
+// VS Code's own theme files hold comments and trailing commas.
+{
+	"include": "./tiny-base.json",
+	/* The default text color. */
+	"colors": {
+		"editor.foreground": "#D4D4D4",
+	},
+	"tokenColors": [
+		{ "scope": "keyword.control", "settings": { "foreground": "#C586C0" } },
+		{ "scope": "string", "settings": { "foreground": "#CE9178" } },
+		{ "scope": "comment", "settings": { "foreground": "#6A9955", "fontStyle": "italic" } },
+	],
+}

@@ -1,8 +1,8 @@
 {
-	"hash": "9652e881cce2ffdd67f86fb5eedcff86801b3115ed7fa46580da800438085901",
+	"hash": "6f90b5af6395ce894f262482bfb7fbcf764c1d4f1af9367fcfd4716aaa3def56",
 	"files": {
-		"package.json": "1c32da7fe08f0fbc0609e805accf5e95e37ace09b53b06fefb84f414336085f1",
-		"scripts/generate-screenshots.ts": "689c9878d01881858a85c4933e390fdf4d227bb9b094a3d39785fce289a85040",
+		"package.json": "380a8e5a0c89714f19a465cd55fd7705960a5273d5f6779ed7fdc6610277eabc",
+		"scripts/generate-screenshots.ts": "568209de42f9c867bef41e3ee010efbda734fc77f313e4dd0b7248f64d956da4",
 		"scripts/screenshot-fixture/docs/forecast-api.md": "6ab5f1aa78e0497f6c1775eb58be2aa5fbfb3696ac63e57feb648b188eff0d42",
 		"scripts/screenshot-fixture/package.json": "57eb6bad716f2dbd4b20240a82c03702635e7e558a9e07193c2d48ba4951a2bc",
 		"scripts/screenshot-fixture/public/index.html": "884e8759adce3acfcc22a65d5c4bf5f3292e448af95d998d91b79832c60f1dac",
@@ -13,6 +13,7 @@
 	"images": [
 		"docs/screenshots/browser-shared-page.png",
 		"docs/screenshots/chat-link.png",
+		"docs/screenshots/chat-syntax-highlighting.png",
 		"docs/screenshots/cli-selection.png",
 		"docs/screenshots/markdown-selection-chip.png",
 		"docs/screenshots/mcp-connected.png",
